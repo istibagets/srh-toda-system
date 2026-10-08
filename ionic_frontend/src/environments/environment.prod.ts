@@ -5,7 +5,7 @@ export const environment = {
   reverb: {
     appKey: 'srhlinktodakey',
     host: 'srh-link-toda.duckdns.org',
-    port: 8080,
+    port: 443,
     scheme: 'https',
   },
 };

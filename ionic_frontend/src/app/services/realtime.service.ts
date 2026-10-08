@@ -48,7 +48,7 @@ export class RealtimeService {
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
       const token = this.authService.token();
       const host = environment.reverb?.host || (isHttps ? 'srh-link-toda.duckdns.org' : window.location.hostname);
-      const port = environment.reverb?.port || 8080;
+      const port = isHttps ? 443 : (environment.reverb?.port || 8080);
       const scheme = isHttps ? 'https' : (environment.reverb?.scheme || 'http');
 
       this.echoInstance = new Echo({

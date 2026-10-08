@@ -29,6 +29,7 @@ WORKDIR /var/www/html
 
 # Copy backend files
 COPY laravel_backend/ .
+COPY laravel_backend/.env.production /var/www/html/.env
 
 # Copy pre-built Ionic frontend assets
 COPY ionic_frontend/www/ /var/www/html/ionic_www/
@@ -53,4 +54,4 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/docker-php-ext-opcache.
 
 EXPOSE 80
 
-CMD php artisan storage:link --force && php artisan package:discover --ansi && (php artisan migrate --force || true) && php artisan config:cache && php artisan route:cache && (php artisan reverb:start --host=0.0.0.0 --port=8080 &) && php-fpm -D && nginx -g 'daemon off;'
+CMD php artisan storage:link --force && php artisan package:discover --ansi && (php artisan migrate --force || true) && php artisan config:cache && php artisan route:cache && (nohup php artisan reverb:start --host=0.0.0.0 --port=8080 > /var/log/reverb.log 2>&1 &) && php-fpm -D && nginx -g 'daemon off;'
