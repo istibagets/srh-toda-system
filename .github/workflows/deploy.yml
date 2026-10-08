@@ -25,7 +25,6 @@ jobs:
             git pull origin main
 
             echo "Building and restarting containers..."
-            cd srh-toda-backend
             docker compose up -d --build --force-recreate
 
             echo "Waiting for services..."
@@ -35,6 +34,5 @@ jobs:
             docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan config:cache
             docker compose exec -T app php artisan route:cache
-            docker compose exec -T app php artisan view:cache
 
             echo "=== DEPLOYMENT COMPLETED SUCCESSFULLY ==="

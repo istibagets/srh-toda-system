@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mariadb:10.11
+    container_name: srh_toda_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-SRH_toda_2026_RootSecure!}
+      MYSQL_DATABASE: ${DB_DATABASE:-srh_link_toda_production}
+      MYSQL_USER: ${DB_USERNAME:-srh_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-SRH_toda_2026_SecurePass!}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srh_toda_app
+    restart: always
+    ports:
+      - "127.0.0.1:8000:80"
+    volumes:
+      - ./laravel_backend/storage:/var/www/html/storage
+      - ./laravel_backend/.env.production:/var/www/html/.env
+      - ./ionic_frontend/www:/var/www/html/ionic_www
+    depends_on:
+      - db
+
+volumes:
+  mariadb_data:
+    external: true

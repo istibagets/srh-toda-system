@@ -1,1 +1,0 @@
-<img src="{{ srh_logo_url() }}" alt="{{ \App\Support\SystemSettings::brandName() }}" width="40" height="40" {{ $attributes->merge(['class' => 'object-contain', 'style' => 'width: 40px; height: 40px; max-width: 40px; max-height: 40px; object-fit: contain;']) }}>

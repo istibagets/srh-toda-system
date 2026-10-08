@@ -1,28 +1,24 @@
 # Root Gitignore for SRH TODA Monorepo
 
 # Backend
-srh-toda-backend/.env
-srh-toda-backend/.env.*
-!srh-toda-backend/.env.example
-srh-toda-backend/vendor/
-srh-toda-backend/node_modules/
-srh-toda-backend/public/storage
-!srh-toda-backend/public/build
-srh-toda-backend/public/hot
-srh-toda-backend/storage/*.key
-srh-toda-backend/storage/logs/*.log
-srh-toda-backend/storage/framework/cache/data/*
-srh-toda-backend/storage/framework/sessions/*
-srh-toda-backend/storage/framework/views/*
-srh-toda-backend/.phpunit.result.cache
+laravel_backend/.env
+laravel_backend/.env.backup
+laravel_backend/vendor/
+laravel_backend/node_modules/
+laravel_backend/public/storage
+laravel_backend/storage/*.key
+laravel_backend/storage/logs/*.log
+laravel_backend/storage/framework/cache/data/*
+laravel_backend/storage/framework/sessions/*
+laravel_backend/storage/framework/views/*
+laravel_backend/.phpunit.result.cache
 
 # Frontend
-srh-toda-frontend/node_modules/
-srh-toda-frontend/www/
-srh-toda-frontend/dist/
-srh-toda-frontend/.angular/
-srh-toda-frontend/npm-debug.log
-srh-toda-frontend/yarn-error.log
+ionic_frontend/node_modules/
+ionic_frontend/.angular/
+!ionic_frontend/www/
+ionic_frontend/npm-debug.log
+ionic_frontend/yarn-error.log
 
 # General
 .DS_Store
