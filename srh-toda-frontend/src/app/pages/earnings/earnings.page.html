@@ -1,0 +1,273 @@
+<ion-header class="ion-no-border srh-earnings-header">
+  <ion-toolbar class="header-toolbar">
+    <div class="header-title-group">
+      <h1 class="header-title">{{ authService.isPassenger() ? 'Spending & Fares' : 'Driver Performance & Stats' }}</h1>
+    </div>
+
+    <!-- ── TIME HORIZON FILTER TABS ───────────────────────── -->
+    <div class="period-tab-bar">
+      <button
+        type="button"
+        class="period-tab-btn"
+        [class.active]="activePeriod() === 'today'"
+        (click)="setPeriod('today')"
+      >
+        Today
+      </button>
+      <button
+        type="button"
+        class="period-tab-btn"
+        [class.active]="activePeriod() === 'week'"
+        (click)="setPeriod('week')"
+      >
+        This Week
+      </button>
+      <button
+        type="button"
+        class="period-tab-btn"
+        [class.active]="activePeriod() === 'month'"
+        (click)="setPeriod('month')"
+      >
+        This Month
+      </button>
+      <button
+        type="button"
+        class="period-tab-btn"
+        [class.active]="activePeriod() === 'all'"
+        (click)="setPeriod('all')"
+      >
+        All Time
+      </button>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="srh-earnings-content" [fullscreen]="true">
+  <ion-refresher slot="fixed" type="radial" (ionRefresh)="loadEarningsData($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="earnings-layout-container">
+    <!-- ── SKELETON SHIMMER LOADING STATE ─────────────────── -->
+    @if (isLoading()) {
+      <div class="skeleton-stream-container">
+        <!-- Hero Shimmer -->
+        <div class="skeleton-card skeleton-hero-rating">
+          <div class="skeleton-circle shimmer"></div>
+          <div class="skeleton-hero-right">
+            <div class="skeleton-line shimmer sm-width"></div>
+            <div class="skeleton-line shimmer md-width"></div>
+            <div class="skeleton-box shimmer"></div>
+          </div>
+        </div>
+
+        <!-- Graph Shimmer -->
+        <div class="skeleton-card skeleton-graph">
+          <div class="skeleton-header-row">
+            <div class="skeleton-line shimmer med-width"></div>
+            <div class="skeleton-line shimmer sm-width"></div>
+          </div>
+          <div class="skeleton-bars-grid">
+            <div class="skeleton-bar shimmer" style="height: 45%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 70%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 35%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 85%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 60%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 95%;"></div>
+            <div class="skeleton-bar shimmer" style="height: 50%;"></div>
+          </div>
+        </div>
+
+        <!-- Sources Shimmer -->
+        <div class="skeleton-card skeleton-sources">
+          <div class="skeleton-line shimmer med-width"></div>
+          <div class="skeleton-track shimmer"></div>
+          <div class="skeleton-track shimmer"></div>
+        </div>
+
+        <!-- Transactions Shimmer -->
+        <div class="skeleton-card skeleton-ledger">
+          <div class="skeleton-line shimmer sm-width"></div>
+          <div class="skeleton-list-item shimmer"></div>
+          <div class="skeleton-list-item shimmer"></div>
+          <div class="skeleton-list-item shimmer"></div>
+        </div>
+      </div>
+    } @else {
+      <!-- ── 1. EXECUTIVE OVERALL RATING & DRIVER METRICS DECK ──────────────── -->
+      <div class="driver-rating-hero-deck">
+        <!-- Left: Animated Radial Progress Ring with Profile Avatar -->
+        <div class="radial-score-container">
+          <div class="radial-ring-wrapper">
+            <svg class="radial-svg" viewBox="0 0 100 100">
+              <defs>
+                <mask id="scoreArcMaskEarnings">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="none"
+                    stroke="#ffffff"
+                    stroke-width="7.5"
+                    stroke-linecap="round"
+                    stroke-dasharray="263.89"
+                    [style.strokeDashoffset]="animatedDashoffset()"
+                    transform="rotate(-90 50 50)"
+                  />
+                </mask>
+              </defs>
+
+              <!-- Background Track Circle -->
+              <circle class="ring-bg" cx="50" cy="50" r="42" />
+
+              <!-- Conic Gradient Fill Masked by Arc Stroke -->
+              <g mask="url(#scoreArcMaskEarnings)">
+                <foreignObject x="0" y="0" width="100" height="100">
+                  <div class="conic-ring-gradient"></div>
+                </foreignObject>
+              </g>
+            </svg>
+
+            <!-- Center Profile Avatar / Fallback Initials -->
+            <div class="radial-avatar-center">
+              @if (userAvatarUrl()) {
+                <img [src]="userAvatarUrl()" alt="User Profile" class="radial-avatar-img" />
+              } @else {
+                <div class="radial-avatar-fallback">
+                  {{ userInitials() }}
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Rating Score Badge -->
+          <div class="radial-score-badge">
+            <span class="score-num">{{ displayRatingNumber().toFixed(1) }}</span>
+            <ion-icon name="star" class="star-gold"></ion-icon>
+          </div>
+        </div>
+
+        <!-- Right: Performance Metrics & User Bio Stack -->
+        <div class="hero-metrics-column">
+          <div class="user-greeting-row">
+            <span class="user-role-label">{{ authService.isPassenger() ? 'PASSENGER RATING' : 'OVERALL RATING' }}</span>
+            <h2 class="user-display-name">{{ userName() }}</h2>
+          </div>
+
+          <div class="metric-tiles-row">
+            <div class="tile-box">
+              <span class="tile-lbl">{{ authService.isPassenger() ? 'TOTAL RIDES' : 'TRIPS DONE' }}</span>
+              <span class="tile-val">{{ summary().total_trips }}</span>
+            </div>
+
+            <div class="tile-divider"></div>
+
+            <div class="tile-box">
+              <span class="tile-lbl">{{ authService.isPassenger() ? 'TOTAL SPENT' : 'REVENUE' }}</span>
+              <span class="tile-val text-emerald">₱{{ summary().total_earnings.toFixed(0) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 2. 7-DAY REVENUE GRAPH VISUALIZER ─────────────── -->
+      <div class="analytics-card graph-card">
+        <div class="card-header-row">
+          <div class="card-title-group">
+            <h3 class="card-title">Weekly Revenue Trends</h3>
+            <span class="card-subtitle">Daily dispatch performance breakdown</span>
+          </div>
+
+          <div class="peak-badge">
+            <span>Peak: {{ summary().peak_day_name }} (₱{{ summary().peak_day_earnings.toFixed(0) }})</span>
+          </div>
+        </div>
+
+        <!-- Interactive Tooltip Banner -->
+        @if (selectedBar(); as bar) {
+          <div class="graph-tooltip-banner">
+            <div class="tooltip-left">
+              <span class="tooltip-day">{{ bar.full_day }}</span>
+              <span class="tooltip-date">{{ bar.date }}</span>
+            </div>
+            <div class="tooltip-right">
+              <span class="tooltip-earnings">₱{{ bar.earnings.toFixed(2) }}</span>
+              <span class="tooltip-trips">{{ bar.trips_count }} {{ bar.trips_count === 1 ? 'trip' : 'trips' }}</span>
+            </div>
+          </div>
+        }
+
+        <!-- 7-Day Animated Pillar Chart -->
+        <div class="pillar-chart-container">
+          <div class="chart-pillars-row">
+            @for (bar of chartBars(); track bar.day_name) {
+              <div
+                class="pillar-column"
+                [class.selected]="selectedBar()?.day_name === bar.day_name"
+                [class.is-today]="bar.is_today"
+                (click)="selectBar(bar)"
+              >
+                <!-- Bar Column Stem Wrapper -->
+                <div class="bar-stem-wrapper">
+                  <div
+                    class="bar-stem"
+                    [class.animated]="isAnimating()"
+                    [style.height.%]="bar.height_pct"
+                  >
+                    @if (bar.earnings > 0) {
+                      <span class="bar-val-badge">₱{{ bar.earnings.toFixed(0) }}</span>
+                    }
+                  </div>
+                </div>
+
+                <!-- Day Label -->
+                <div class="bar-label-group">
+                  <span class="day-name" [class.today-text]="bar.is_today">{{ bar.day_name }}</span>
+                  <span class="date-sub">{{ bar.date.split(' ')[1] }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 3. REVENUE BY TRIP SOURCE ──────────────────────── -->
+      <div class="analytics-card sources-card">
+        <div class="card-header-row">
+          <div class="card-title-group">
+            <h3 class="card-title">Dispatch Channel Share</h3>
+            <span class="card-subtitle">Revenue distribution by ride category</span>
+          </div>
+        </div>
+
+        <div class="sources-list">
+          @for (source of sources(); track source.type) {
+            <div class="source-item">
+              <div class="source-item-top">
+                <div class="source-meta">
+                  <span class="source-title">{{ source.label }}</span>
+                  <span class="source-trips-tag">({{ source.trips_count }} trips)</span>
+                </div>
+                <div class="source-amounts">
+                  <span class="source-rev">₱{{ source.earnings.toFixed(2) }}</span>
+                  <span class="source-pct">{{ source.pct }}%</span>
+                </div>
+              </div>
+
+              <!-- Animated Progress Bar -->
+              <div class="source-track">
+                <div
+                  class="source-fill"
+                  [class.animated]="isAnimating()"
+                  [style.width.%]="source.pct"
+                  [style.background]="source.color"
+                ></div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</ion-content>
+

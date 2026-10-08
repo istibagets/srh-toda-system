@@ -1,0 +1,41 @@
+services:
+  db:
+    image: mariadb:10.11
+    container_name: srh_toda_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: srh_toda_password_2026
+      MYSQL_DATABASE: srh_link_toda
+      MYSQL_USER: srh_user
+      MYSQL_PASSWORD: srh_toda_password_2026
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    networks:
+      - srh_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srh_toda_app
+    restart: always
+    ports:
+      - "127.0.0.1:8000:80"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    volumes:
+      - app_uploads:/var/www/html/storage/app/public
+    networks:
+      - srh_network
+
+volumes:
+  db_data:
+  app_uploads:
+
+networks:
+  srh_network:
+    driver: bridge

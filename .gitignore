@@ -1,0 +1,32 @@
+﻿# Root Gitignore for SRH TODA Monorepo
+
+# Backend
+srh-toda-backend/.env
+srh-toda-backend/.env.*
+!srh-toda-backend/.env.example
+srh-toda-backend/vendor/
+srh-toda-backend/node_modules/
+srh-toda-backend/public/storage
+srh-toda-backend/public/build
+srh-toda-backend/public/hot
+srh-toda-backend/storage/*.key
+srh-toda-backend/storage/logs/*.log
+srh-toda-backend/storage/framework/cache/data/*
+srh-toda-backend/storage/framework/sessions/*
+srh-toda-backend/storage/framework/views/*
+srh-toda-backend/.phpunit.result.cache
+
+# Frontend
+srh-toda-frontend/node_modules/
+srh-toda-frontend/www/
+srh-toda-frontend/dist/
+srh-toda-frontend/.angular/
+srh-toda-frontend/npm-debug.log
+srh-toda-frontend/yarn-error.log
+
+# General
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

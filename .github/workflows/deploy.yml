@@ -1,0 +1,39 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Oracle Cloud VM via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            echo "Navigating to project directory..."
+            cd ~/srh-toda-system
+
+            echo "Pulling latest code from GitHub..."
+            git pull origin main
+
+            echo "Building and restarting containers..."
+            cd srh-toda-backend
+            docker compose up -d --build
+
+            echo "Waiting for services..."
+            sleep 5
+
+            echo "Running database migrations..."
+            docker compose exec -T app php artisan migrate --force
+            docker compose exec -T app php artisan config:cache
+            docker compose exec -T app php artisan route:cache
+
+            echo "=== DEPLOYMENT COMPLETED SUCCESSFULLY ==="

@@ -1,0 +1,867 @@
+// ========================================================
+// PROFESSIONAL DRIVER EARNINGS & FINANCIAL ANALYTICS
+// Clean light theme, animated graph, skeleton shimmers
+// ========================================================
+
+// ── 1. CLEAN LIGHT HEADER & PERIOD TAB BAR ─────────────
+.srh-earnings-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+
+  .header-toolbar {
+    --background: transparent;
+    --border-width: 0;
+    padding: 0.85rem 1rem 0.85rem;
+  }
+
+  .header-title-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+
+    .header-title {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0;
+      letter-spacing: -0.03em;
+    }
+  }
+
+  .period-tab-bar {
+    display: flex;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 3px;
+    gap: 3px;
+
+    .period-tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 0.45rem 0.25rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+      &.active {
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+        font-weight: 700;
+      }
+    }
+  }
+}
+
+// ── 2. CONTENT CONTAINER ───────────────────────────────
+.srh-earnings-content {
+  --background: #f8fafc;
+
+  .earnings-layout-container {
+    padding: 1rem 1.25rem 3rem;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+// ── 3. SKELETON SHIMMER SYSTEM ─────────────────────────
+@keyframes shimmerSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #f1f5f9 25%,
+    #e2e8f0 50%,
+    #f1f5f9 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerSweep 1.5s infinite linear;
+  border-radius: 8px;
+}
+
+.skeleton-stream-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .skeleton-card {
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    &.skeleton-hero-rating {
+      flex-direction: row;
+      align-items: center;
+      gap: 1.15rem;
+
+      .skeleton-circle {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .skeleton-hero-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+
+        .md-width {
+          width: 70%;
+          height: 20px;
+        }
+
+        .skeleton-box {
+          height: 48px;
+          border-radius: 12px;
+          width: 100%;
+        }
+      }
+    }
+
+    .skeleton-line {
+      height: 14px;
+
+      &.sm-width { width: 35%; }
+      &.med-width { width: 55%; }
+      &.lg-title { height: 32px; width: 65%; border-radius: 10px; }
+    }
+
+    .skeleton-pill-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+
+      .skeleton-pill {
+        height: 48px;
+        border-radius: 12px;
+      }
+    }
+
+    .skeleton-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .skeleton-bars-grid {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      height: 140px;
+      padding-top: 1rem;
+      gap: 0.5rem;
+
+      .skeleton-bar {
+        flex: 1;
+        border-radius: 8px 8px 4px 4px;
+        min-height: 20px;
+      }
+    }
+
+    .skeleton-track {
+      height: 20px;
+      border-radius: 6px;
+      width: 100%;
+    }
+
+    .skeleton-list-item {
+      height: 52px;
+      border-radius: 14px;
+      width: 100%;
+    }
+  }
+}
+
+// ── 4. EXECUTIVE OVERALL RATING & PERFORMANCE HERO DECK ──────
+.driver-rating-hero-deck {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+  padding: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  overflow: hidden;
+
+  /* Left: Radial Score Container */
+  .radial-score-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .radial-ring-wrapper {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .radial-svg {
+      width: 100%;
+      height: 100%;
+
+      .ring-bg {
+        fill: none;
+        stroke: #f1f5f9;
+        stroke-width: 7;
+      }
+
+      .conic-ring-gradient {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: conic-gradient(
+          from -15deg at 50% 50%,
+          #2563eb 0deg,
+          #2563eb 35deg,
+          #3b82f6 90deg,
+          #0284c7 140deg,
+          #06b6d4 180deg,
+          #10b981 270deg,
+          #059669 340deg,
+          #2563eb 360deg
+        );
+      }
+    }
+
+    .radial-avatar-center {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #eff6ff;
+
+      .radial-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .radial-avatar-fallback {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
+        color: #ffffff;
+        font-size: 1.2rem;
+        font-weight: 900;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: -0.02em;
+      }
+    }
+
+    .radial-score-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+      border-radius: 99px;
+      padding: 2px 8px;
+      margin-top: -12px;
+      z-index: 5;
+
+      .score-num {
+        font-size: 0.78rem;
+        font-weight: 900;
+        color: #0f172a;
+      }
+
+      .star-gold {
+        font-size: 0.8rem;
+        color: #f59e0b;
+      }
+    }
+  }
+
+  /* Right: Performance Metrics Column */
+  .hero-metrics-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 0;
+
+    .user-greeting-row {
+      display: flex;
+      flex-direction: column;
+
+      .user-role-label {
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: #2563eb;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+
+      .user-display-name {
+        font-size: 1.15rem;
+        font-weight: 900;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    .metric-tiles-row {
+      display: flex;
+      align-items: center;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 0.55rem 0.65rem;
+
+      .tile-box {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+
+        .tile-lbl {
+          font-size: 0.6rem;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          color: #64748b;
+          text-transform: uppercase;
+          margin-bottom: 1px;
+        }
+
+        .tile-val {
+          font-size: 1rem;
+          font-weight: 900;
+          color: #0f172a;
+
+          &.text-emerald {
+            color: #059669;
+          }
+        }
+      }
+
+      .tile-divider {
+        width: 1px;
+        height: 22px;
+        background: #cbd5e1;
+      }
+    }
+  }
+}
+
+// ── 5. ANALYTICS CARD BASE ─────────────────────────────
+.analytics-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .card-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+
+    .card-title-group {
+      display: flex;
+      flex-direction: column;
+
+      .card-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+
+      .card-subtitle {
+        font-size: 0.72rem;
+        color: #64748b;
+        margin-top: 0.15rem;
+      }
+    }
+
+    .peak-badge {
+      display: flex;
+      align-items: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: #334155;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+  }
+}
+
+// ── 6. 7-DAY REVENUE PILLAR CHART ──────────────────────
+@keyframes growBarStem {
+  0% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.graph-tooltip-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+
+  .tooltip-left {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+
+    .tooltip-day {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .tooltip-date {
+      font-size: 0.72rem;
+      color: #64748b;
+    }
+  }
+
+  .tooltip-right {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+
+    .tooltip-earnings {
+      font-size: 1.05rem;
+      font-weight: 900;
+      color: #059669;
+    }
+
+    .tooltip-trips {
+      font-size: 0.72rem;
+      color: #64748b;
+    }
+  }
+}
+
+.pillar-chart-container {
+  padding-top: 0.5rem;
+
+  .chart-pillars-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 160px;
+    gap: 0.45rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #f1f5f9;
+
+    .pillar-column {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+      }
+
+      .bar-stem-wrapper {
+        width: 100%;
+        height: 130px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+
+        .bar-stem {
+          width: 80%;
+          max-width: 28px;
+          background: #e2e8f0;
+          border-radius: 8px 8px 4px 4px;
+          position: relative;
+          transform-origin: bottom;
+          transition: background 0.2s ease, height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+          &.animated {
+            animation: growBarStem 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          }
+
+          .bar-val-badge {
+            display: none;
+          }
+        }
+      }
+
+      .bar-label-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 0.4rem;
+
+        .day-name {
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: #64748b;
+
+          &.today-text {
+            color: #2563eb;
+            font-weight: 800;
+          }
+        }
+
+        .date-sub {
+          font-size: 0.58rem;
+          font-weight: 600;
+          color: #94a3b8;
+        }
+      }
+
+      // Selected / Today State Highlights
+      &.selected {
+        .bar-stem {
+          background: #2563eb !important;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .day-name {
+          color: #2563eb;
+          font-weight: 800;
+        }
+      }
+
+      &.is-today:not(.selected) {
+        .bar-stem {
+          background: #93c5fd;
+        }
+      }
+    }
+  }
+}
+
+// ── 7. REVENUE BY TRIP SOURCE ──────────────────────────
+@keyframes expandSourceFill {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+
+  .source-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+
+    .source-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      .source-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 0.35rem;
+        flex: 1;
+        min-width: 0;
+        padding-right: 0.5rem;
+
+        .source-title {
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: #1e293b;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .source-trips-tag {
+          font-size: 0.7rem;
+          color: #64748b;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+      }
+
+      .source-amounts {
+        display: flex;
+        align-items: baseline;
+        gap: 0.35rem;
+
+        .source-rev {
+          font-size: 0.85rem;
+          font-weight: 800;
+          color: #0f172a;
+        }
+
+        .source-pct {
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: #64748b;
+        }
+      }
+    }
+
+    .source-track {
+      height: 8px;
+      background: #f1f5f9;
+      border-radius: 4px;
+      overflow: hidden;
+
+      .source-fill {
+        height: 100%;
+        border-radius: 4px;
+        transform-origin: left;
+        transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &.animated {
+          animation: expandSourceFill 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      }
+    }
+  }
+}
+
+// ── 8. PASSENGER RATINGS & REVIEWS STREAM ───
+.reviews-items-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+
+  .review-item-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.75rem 0.85rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    transition: all 0.15s ease;
+    width: 100%;
+    box-sizing: border-box;
+
+    &:hover {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+    }
+
+    .review-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      .stars-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #fffbeb;
+        border: 1px solid #fef3c7;
+        padding: 3px 8px;
+        border-radius: 10px;
+
+        &.five-stars {
+          background: #f0fdf4;
+          border-color: #dcfce7;
+
+          .star-score {
+            color: #16a34a;
+          }
+        }
+
+        .star-score {
+          font-size: 0.84rem;
+          font-weight: 800;
+          color: #d97706;
+        }
+
+        .star-icons-wrap {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+
+          .review-star-icon {
+            font-size: 0.82rem;
+            color: #cbd5e1;
+
+            &.filled {
+              color: #f59e0b;
+            }
+          }
+        }
+      }
+
+      .review-time {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+    }
+
+    .review-tags-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+
+      .review-tag-chip {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        padding: 2px 7px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+
+        ion-icon {
+          font-size: 0.72rem;
+        }
+      }
+    }
+
+    .review-comment-bubble {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.45rem 0.65rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+
+      .quote-icon {
+        font-size: 0.95rem;
+        color: #3b82f6;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .comment-text {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #334155;
+        font-style: italic;
+        line-height: 1.35;
+      }
+    }
+
+    .review-trip-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.68rem;
+      color: #64748b;
+      font-weight: 600;
+      padding-top: 2px;
+
+      .meta-dest {
+        color: #1e293b;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 140px;
+      }
+
+      .meta-dot {
+        color: #cbd5e1;
+      }
+
+      .meta-fare {
+        color: #059669;
+        font-weight: 800;
+      }
+
+      .meta-id {
+        color: #94a3b8;
+      }
+    }
+  }
+}
+
+.empty-ledger-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+  padding: 1.8rem 1rem;
+  color: #94a3b8;
+  font-size: 0.82rem;
+
+  .empty-star-icon {
+    font-size: 2rem;
+    color: #cbd5e1;
+  }
+}
