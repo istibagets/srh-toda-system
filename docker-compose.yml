@@ -31,3 +31,4 @@ services:
 volumes:
   mariadb_data:
     external: true
+    name: srh-toda-backend_db_data
