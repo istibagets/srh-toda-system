@@ -1,4 +1,4 @@
-﻿# Root Gitignore for SRH TODA Monorepo
+# Root Gitignore for SRH TODA Monorepo
 
 # Backend
 srh-toda-backend/.env
@@ -7,7 +7,7 @@ srh-toda-backend/.env.*
 srh-toda-backend/vendor/
 srh-toda-backend/node_modules/
 srh-toda-backend/public/storage
-srh-toda-backend/public/build
+!srh-toda-backend/public/build
 srh-toda-backend/public/hot
 srh-toda-backend/storage/*.key
 srh-toda-backend/storage/logs/*.log
