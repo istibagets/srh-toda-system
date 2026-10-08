@@ -26,7 +26,7 @@ jobs:
 
             echo "Building and restarting containers..."
             cd srh-toda-backend
-            docker compose up -d --build
+            docker compose up -d --build --force-recreate
 
             echo "Waiting for services..."
             sleep 5
