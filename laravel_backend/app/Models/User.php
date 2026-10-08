@@ -61,7 +61,10 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute()
     {
         if ($this->profile_photo_url) {
-            return asset('storage/' . $this->profile_photo_url);
+            if (str_starts_with($this->profile_photo_url, 'http://') || str_starts_with($this->profile_photo_url, 'https://')) {
+                return $this->profile_photo_url;
+            }
+            return config('app.url') . '/storage/' . ltrim($this->profile_photo_url, '/');
         }
         return null;
     }
