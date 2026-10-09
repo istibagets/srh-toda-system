@@ -3,13 +3,12 @@
   --border: none;
   border-top: 1px solid #e2e8f0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
-  box-sizing: border-box;
-  // Only reserve the part of the home-indicator inset that actually needs clearing (the
-  // indicator overlaps the bar's lower padding), so there's no large empty strip below the tabs.
-  --tab-safe-extra: max(calc(env(safe-area-inset-bottom, 0px) - 16px), 0px);
-  height: calc(56px + var(--tab-safe-extra));
-  min-height: calc(56px + var(--tab-safe-extra));
-  max-height: calc(56px + var(--tab-safe-extra));
+  // Ionic forces content-box on ion-tab-bar, so height is the 56px tab row and the
+  // bottom padding below it is the only home-indicator allowance (kept small on purpose).
+  --tab-safe-extra: max(calc(env(safe-area-inset-bottom, 0px) - 22px), 0px);
+  height: 56px;
+  min-height: 56px;
+  max-height: 56px;
   position: relative;
   z-index: 1000;
   contain: layout size style;
