@@ -4,13 +4,16 @@
   border-top: 1px solid #e2e8f0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
-  height: calc(56px + env(safe-area-inset-bottom, 0px));
-  min-height: calc(56px + env(safe-area-inset-bottom, 0px));
-  max-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  // Only reserve the part of the home-indicator inset that actually needs clearing (the
+  // indicator overlaps the bar's lower padding), so there's no large empty strip below the tabs.
+  --tab-safe-extra: max(calc(env(safe-area-inset-bottom, 0px) - 16px), 0px);
+  height: calc(56px + var(--tab-safe-extra));
+  min-height: calc(56px + var(--tab-safe-extra));
+  max-height: calc(56px + var(--tab-safe-extra));
   position: relative;
   z-index: 1000;
   contain: layout size style;
-  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--tab-safe-extra);
   width: 100%;
 
   .tab-btn {

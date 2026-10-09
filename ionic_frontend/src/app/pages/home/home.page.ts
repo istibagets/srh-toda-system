@@ -2000,7 +2000,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   // Strict 1:1 real-time on-sync calculation for floating buttons, Stage 1 tuck/hide, Stage 2 header zoom/fade & map parallax
   onSheetDragSync(currentTranslateY: number): void {
-    const sheetTopFromBottom = window.innerHeight - getTabBarHeight() - currentTranslateY;
+    // Measure the real container the floating buttons are anchored to instead of assuming a
+    // fixed tab-bar height, so they track the sheet on every device.
+    const anchorEl = this.cachedPowerEl || document.getElementById('floating-power-container');
+    const parentH = (anchorEl?.offsetParent as HTMLElement | null)?.clientHeight || 0;
+    const sheetTopFromBottom = (parentH > 100 ? parentH : window.innerHeight - getTabBarHeight()) - currentTranslateY;
     const normalPos = Math.round(sheetTopFromBottom + 72);
 
     // Stage 1 Trigger: Starts across center pin (~52% from top / 48% sheet height)
