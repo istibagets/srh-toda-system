@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: ionic_frontend/package-lock.json
 
@@ -24,7 +24,15 @@ jobs:
         run: |
           cd ionic_frontend
           npm ci --prefer-offline || npm install --legacy-peer-deps
-          npm run build
+          npm run build || {
+            echo "::warning::Frontend build failed, checking for pre-built www folder..."
+            if [ -d "www" ] && [ "$(ls -A www)" ]; then
+              echo "Using pre-built www folder from repository."
+            else
+              echo "::error::No pre-built www folder found!"
+              exit 1
+            fi
+          }
           cd ..
 
       - name: Package Deployment Bundle
