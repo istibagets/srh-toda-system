@@ -186,6 +186,15 @@ export class HomePage implements AfterViewInit, OnDestroy {
   }
 
   private lastDriverTripStatus: string | null = null;
+  // ── Floating power / map buttons: distance (px) above the bottom sheet ──────────
+  // Adjust these two numbers independently. Higher = buttons sit higher above the sheet.
+  private readonly BUTTON_LIFT_DEFAULT = 72; // Android & desktop
+  private readonly BUTTON_LIFT_IOS = 72;     // iPhone / iPad
+  private readonly isIOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
   private cachedPowerEl: HTMLElement | null = null;
   private cachedMapControlsEl: HTMLElement | null = null;
   private cachedHeaderEl: HTMLElement | null = null;
@@ -703,7 +712,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       this.displayToast(`💬 ${sender}: "${msg.message}"`);
       try {
         this.soundService.playBookingAlert();
-      } catch {}
+      } catch { }
     }
   }
 
@@ -830,7 +839,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
         }
       }
 
-    // For PASSENGER on active trip: tricycle marker snaps to road-facing position and camera follows
+      // For PASSENGER on active trip: tricycle marker snaps to road-facing position and camera follows
     } else if (this.authService.isPassenger() && detailedCoords.length >= 2) {
       const pRide = this.activePassengerRide();
       const pStatus = String(pRide?.status || '').toLowerCase().trim();
@@ -2010,7 +2019,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       const measured = parentEl.getBoundingClientRect().bottom - sheetEl.getBoundingClientRect().top;
       if (isFinite(measured) && measured > 0) sheetTopFromBottom = measured;
     }
-    const normalPos = Math.round(sheetTopFromBottom + 72);
+    const normalPos = Math.round(sheetTopFromBottom + (this.isIOS ? this.BUTTON_LIFT_IOS : this.BUTTON_LIFT_DEFAULT));
 
     // Stage 1 Trigger: Starts across center pin (~52% from top / 48% sheet height)
     const buttonHideStart = Math.round(window.innerHeight * 0.52);
@@ -2684,20 +2693,20 @@ export class HomePage implements AfterViewInit, OnDestroy {
       }
 
       const drvLat = Number(
-        pRide.driver_lat || 
-        pRide.driver?.lat || 
+        pRide.driver_lat ||
+        pRide.driver?.lat ||
         this.TERMINAL_LAT
       );
       const drvLng = Number(
-        pRide.driver_lng || 
-        pRide.driver?.lng || 
+        pRide.driver_lng ||
+        pRide.driver?.lng ||
         this.TERMINAL_LNG
       );
 
       // Determine heading: use live heading, or calculate from driver position to target along path
       let drvHeading = Number(
         pRide.driver_heading !== undefined && pRide.driver_heading !== null && pRide.driver_heading !== 0
-          ? pRide.driver_heading 
+          ? pRide.driver_heading
           : (pRide.driver?.heading ? pRide.driver.heading : 0)
       );
 
@@ -4088,7 +4097,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       // Only request compass permission in true free-roam 3D mode
       if (!hasActiveTrip) {
         if (typeof (DeviceOrientationEvent as any)?.requestPermission === 'function') {
-          (DeviceOrientationEvent as any).requestPermission().catch(() => {});
+          (DeviceOrientationEvent as any).requestPermission().catch(() => { });
         }
       }
 
