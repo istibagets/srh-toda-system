@@ -809,7 +809,7 @@ export class SuperadminPage implements OnInit {
         lng: 120.92240,
       },
       {
-        name: 'Phase 1 Clubhouse',
+        name: 'Clubhouse',
         desc: 'Recreation Center & Swimming Pool',
         fare: 50,
         type: 'clubhouse',

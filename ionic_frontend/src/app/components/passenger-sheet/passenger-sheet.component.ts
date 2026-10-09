@@ -1,3 +1,4 @@
+import { getTabBarHeight } from '../../utils/layout';
 import {
   Component,
   inject,
@@ -144,7 +145,7 @@ export class PassengerSheetComponent implements AfterViewInit, OnDestroy {
     if (this.activeRide()) {
       return this.MID_TRANSLATE_Y;
     }
-    return Math.max(0, window.innerHeight - 56 - 250);
+    return Math.max(0, window.innerHeight - getTabBarHeight() - 250);
   }
 
   get MID_TRANSLATE_Y(): number {
@@ -152,30 +153,30 @@ export class PassengerSheetComponent implements AfterViewInit, OnDestroy {
     if (ride) {
       const status = String(ride.status || '').toLowerCase().trim();
       if (status === 'fare_proposed') {
-        return Math.max(15, window.innerHeight - 56 - 292);
+        return Math.max(15, window.innerHeight - getTabBarHeight() - 292);
       }
       if (status === 'accepted') {
-        return Math.max(20, window.innerHeight - 56 - 252);
+        return Math.max(20, window.innerHeight - getTabBarHeight() - 252);
       }
       if (status === 'en_route') {
-        return Math.max(20, window.innerHeight - 56 - 256);
+        return Math.max(20, window.innerHeight - getTabBarHeight() - 256);
       }
       if (status === 'arrived') {
-        return Math.max(20, window.innerHeight - 56 - 256);
+        return Math.max(20, window.innerHeight - getTabBarHeight() - 256);
       }
       if (status === 'in_transit') {
-        return Math.max(25, window.innerHeight - 56 - 256);
+        return Math.max(25, window.innerHeight - getTabBarHeight() - 256);
       }
-      return Math.max(20, window.innerHeight - 56 - 245); // Searching / Alerting
+      return Math.max(20, window.innerHeight - getTabBarHeight() - 280); // Searching / Alerting
     }
-    return Math.max(40, window.innerHeight - 56 - 235); // Default booking hub
+    return Math.max(40, window.innerHeight - getTabBarHeight() - 235); // Default booking hub
   }
 
   get MAX_TRANSLATE_Y(): number {
     if (this.activeRide()) {
       return this.MID_TRANSLATE_Y;
     }
-    return window.innerHeight - 56 - 66; // 66px visible collapsed strip above bottom tab bar
+    return window.innerHeight - getTabBarHeight() - 66; // 66px visible collapsed strip above bottom tab bar
   }
 
   constructor() {

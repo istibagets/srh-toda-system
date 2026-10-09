@@ -150,7 +150,7 @@ class SystemSettings
                 'color' => 'emerald',
             ],
             [
-                'name'  => 'Phase 1 Clubhouse',
+                'name'  => 'Clubhouse',
                 'desc'  => 'Recreation Center & Swimming Pool',
                 'fare'  => 50,
                 'lat'   => 15.42780,

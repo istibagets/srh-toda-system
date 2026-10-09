@@ -134,7 +134,7 @@ class SuperAdminApiController extends Controller
                     'driver_name'    => $driverName,
                     'mtop_number'    => $r->driverProfile->mtop_number ?? '128491',
                     'pickup'         => $r->pickup_location ?? 'SRH Central Terminal',
-                    'destination'    => $r->destination ?? 'Phase 1 Gate',
+                    'destination'    => $r->destination ?? 'Main Gate',
                     'fare'           => (float) $r->fare,
                     'status'         => $r->status,
                     'created_at'     => $r->created_at ? $r->created_at->format('M d, g:i A') : 'N/A',

@@ -235,7 +235,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   // ══════════════════════════════════════════════════════════════════════════
   readonly popularLandmarks = signal<Array<{ name: string; fare: number; icon: string; color: string; desc: string; lat: number; lng: number }>>([
     { name: 'Main Gate Guard House', fare: 50, icon: 'shield-outline', color: 'emerald', desc: 'Main Entrance & Central TODA Bay', lat: 15.42955, lng: 120.92240 },
-    { name: 'Phase 1 Clubhouse', fare: 50, icon: 'business-outline', color: 'indigo', desc: 'Recreation Center & Swimming Pool', lat: 15.42780, lng: 120.92410 },
+    { name: 'Clubhouse', fare: 50, icon: 'business-outline', color: 'indigo', desc: 'Recreation Center & Swimming Pool', lat: 15.42780, lng: 120.92410 },
     { name: 'Santa Rosa Public Market', fare: 60, icon: 'storefront-outline', color: 'purple', desc: 'Town Center & Public Market Terminal', lat: 15.42469999648076, lng: 120.93842748892547 },
     { name: 'SM Cabanatuan', fare: 120, icon: 'cart-outline', color: 'blue', desc: 'SM City Cabanatuan Terminal & Mall Complex', lat: 15.467008627792355, lng: 120.95436226867764 },
   ]);
@@ -2013,7 +2013,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
   onSheetDragSync(currentTranslateY: number): void {
     // Anchor to the sheet's real on-screen top edge and the buttons' real container bottom,
     // so placement never depends on assumed tab-bar / safe-area sizes.
-    const anchorEl = this.cachedPowerEl || document.getElementById('floating-power-container');
+    const anchorEl = (this.cachedPowerEl?.offsetParent ? this.cachedPowerEl : null) ||
+      document.getElementById('floating-map-controls-container') ||
+      document.getElementById('floating-power-container');
     const parentEl = anchorEl?.offsetParent as HTMLElement | null;
     const sheetEl = document.getElementById('driver-bottom-sheet');
     let sheetTopFromBottom = window.innerHeight - getTabBarHeight() - currentTranslateY;
