@@ -115,7 +115,7 @@ class SystemSettings
         return [
             [
                 'question' => 'How are tricycle fares determined in Santa Rosa Homes?',
-                'answer' => 'Fares are calculated based on standardized TODA matrix guidelines agreed upon with the local Barangay and HOA, taking into account trip distance, passenger count, and standard day vs. late-night schedules.'
+                'answer' => 'Each destination has a fixed estimated fare set by the TODA for 1, 2, 3 and 4 passengers. The fare is the starting point, and the driver and passenger may still agree on a different amount.'
             ],
             [
                 'question' => 'What are the operating hours of the TODA terminal?',

@@ -830,7 +830,7 @@ export class SuperadminPage implements OnInit {
       await this.superAdminService.updateCmsData({ landmarks: updated });
       this.showToast(`Landmark "${item.name}" saved successfully!`, 'success');
     } catch {
-      this.showToast('Landmark updated. Click Save Fare Matrix to persist.', 'primary');
+      this.showToast('Landmark updated. Click Save Settings to persist.', 'primary');
     }
   }
 

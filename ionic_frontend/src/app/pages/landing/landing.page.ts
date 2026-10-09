@@ -17,6 +17,8 @@ import {
   peopleOutline,
 } from 'ionicons/icons';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
+import { DEFAULT_WALKIN_ZONES, WalkinZone, normalizeWalkinZones } from '../../utils/fare';
 
 interface FaqItem {
   question: string;
@@ -44,7 +46,7 @@ export class LandingPage implements OnInit {
     {
       question: 'How are tricycle fares determined in Santa Rosa Homes?',
       answer:
-        'Fares strictly follow the official municipal tariff schedule: an initial base fare of ₱15.00 for the first kilometer, and ₱3.50 for each succeeding kilometer. Night differential applies between 10:00 PM and 5:00 AM.',
+        'Each destination has a fixed estimated fare set by the TODA for 1, 2, 3 and 4 passengers, shown in the fare schedule. The fare is the starting point, and the driver and passenger may still agree on a different amount.',
       isOpen: false,
     },
     {
@@ -83,7 +85,20 @@ export class LandingPage implements OnInit {
     });
   }
 
+  fareZones = signal<WalkinZone[]>(DEFAULT_WALKIN_ZONES);
+
+  private async loadFareZones(): Promise<void> {
+    try {
+      const res = await fetch(`${environment.apiUrl}/walkin-fares`, { headers: { Accept: 'application/json' } });
+      const zones = normalizeWalkinZones((await res.json())?.zones);
+      if (zones.length > 0) this.fareZones.set(zones);
+    } catch {
+      // keep the built-in list when offline
+    }
+  }
+
   ngOnInit(): void {
+    void this.loadFareZones();
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/tabs/home'], { replaceUrl: true });
       return;

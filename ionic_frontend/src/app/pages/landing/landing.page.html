@@ -81,7 +81,7 @@
             </div>
             <h3 class="standard-title">Regulated Fares</h3>
             <p class="standard-text">
-              Standardized distance-based tariff rates regulated by the Santa Rosa Homes TODA Association with transparent fare calculation.
+              Fixed destination fares set by the Santa Rosa Homes TODA Association and shown before you ride.
             </p>
           </div>
 
@@ -102,9 +102,9 @@
     <section id="tariff" class="tariff-section">
       <div class="landing-container">
         <div class="section-header">
-          <span class="section-label">MUNICIPAL TARIFF MATRIX</span>
-          <h2 class="section-title">Official Regulated Rate Schedule</h2>
-          <p class="section-sub">Standard distance tariffs active across Santa Rosa Homes and adjacent routes.</p>
+          <span class="section-label">FARE SCHEDULE</span>
+          <h2 class="section-title">Official Destination Fares</h2>
+          <p class="section-sub">Fixed estimated fares set by the TODA for each destination, by number of passengers.</p>
         </div>
 
         <div class="tariff-card">
@@ -112,40 +112,29 @@
             <table class="tariff-table">
               <thead>
                 <tr>
-                  <th>Classification</th>
-                  <th>Regulated Rate</th>
-                  <th>Coverage &amp; Conditions</th>
+                  <th>Destination</th>
+                  <th>1 Passenger</th>
+                  <th>2 Passengers</th>
+                  <th>3 Passengers</th>
+                  <th>4 Passengers</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td class="rate-name"><strong>Base Fare</strong></td>
-                  <td class="rate-val">₱15.00</td>
-                  <td class="rate-note">First 1.0 kilometer distance</td>
-                </tr>
-                <tr>
-                  <td class="rate-name"><strong>Succeeding Distance</strong></td>
-                  <td class="rate-val">₱3.50 / km</td>
-                  <td class="rate-note">Per kilometer after the first km</td>
-                </tr>
-                <tr>
-                  <td class="rate-name"><strong>Night Differential</strong></td>
-                  <td class="rate-val">+ ₱5.00</td>
-                  <td class="rate-note">Applies from 10:00 PM to 5:00 AM</td>
-                </tr>
-
-                <tr>
-                  <td class="rate-name"><strong>Terminal Contribution</strong></td>
-                  <td class="rate-val">₱2.00 / trip</td>
-                  <td class="rate-note">TODA terminal maintenance fund</td>
-                </tr>
+                @for (z of fareZones(); track z.name) {
+                  <tr>
+                    <td class="rate-name"><strong>{{ z.name }}</strong></td>
+                    @for (f of z.fares; track $index) {
+                      <td class="rate-val">₱{{ f }}</td>
+                    }
+                  </tr>
+                }
               </tbody>
             </table>
           </div>
 
           <div class="tariff-footer-note">
             <ion-icon name="shield-checkmark-outline"></ion-icon>
-            <span>Fares are strictly regulated by municipal transport authority. Operators are prohibited from charging rates beyond this schedule.</span>
+            <span>Listed fares are estimates set by the TODA. The driver and passenger may still agree on a different amount.</span>
           </div>
         </div>
       </div>

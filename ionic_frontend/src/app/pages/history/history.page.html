@@ -328,16 +328,6 @@
             <div class="receipt-section fare-section">
               <span class="section-title">FARE ITEMIZATION</span>
               <div class="fare-breakdown-box">
-                <div class="fare-line">
-                  <span class="line-label">Base Terminal Transit Fare</span>
-                  <span class="line-val">₱{{ (trip.fare >= 20 ? 20 : trip.fare).toFixed(2) }}</span>
-                </div>
-                @if (trip.fare > 20) {
-                  <div class="fare-line">
-                    <span class="line-label">Distance / Zone Surcharge</span>
-                    <span class="line-val">₱{{ (trip.fare - 20).toFixed(2) }}</span>
-                  </div>
-                }
                 <div class="fare-line total-line">
                   <span class="total-label">TOTAL FARE</span>
                   <span class="total-amount">₱{{ trip.fare.toFixed(2) }}</span>

@@ -46,6 +46,10 @@ Route::get('/maintenance-status', function () {
     ]);
 });
 
+Route::get('/walkin-fares', function () {
+    return response()->json(['status' => 'success', 'zones' => \App\Support\SystemSettings::getWalkinZones()]);
+});
+
 Route::get('/landmarks', function () {
     return response()->json([
         'status'    => 'success',
