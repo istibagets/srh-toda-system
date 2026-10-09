@@ -189,7 +189,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   // ── Floating power / map buttons: distance (px) above the bottom sheet ──────────
   // Adjust these two numbers independently. Higher = buttons sit higher above the sheet.
   private readonly BUTTON_LIFT_DEFAULT = 72; // Android & desktop
-  private readonly BUTTON_LIFT_IOS = 72;     // iPhone / iPad
+  private readonly BUTTON_LIFT_IOS = 90;     // iPhone / iPad
   private readonly isIOS =
     typeof navigator !== 'undefined' &&
     (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
