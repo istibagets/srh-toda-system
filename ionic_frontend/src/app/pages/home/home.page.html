@@ -295,34 +295,44 @@
   'Rejected') {
   <div class="compliance-screen-wrap suspended-bg">
     <div class="compliance-card">
-      <div class="suspension-banner">
+      <div class="suspension-banner" [class.appealed]="driverService.driver().appealStatus === 'Pending'">
         <div class="warning-icon-wrap">
-          <ion-icon name="warning-outline"></ion-icon>
+          <ion-icon [name]="driverService.driver().appealStatus === 'Pending' ? 'time-outline' : 'warning-outline'"></ion-icon>
         </div>
         <div>
-          <span class="status-pill error">
-            {{ driverService.driver().complianceStatus === 'Rejected' ? 'APPLICATION DECLINED' : 'ACCOUNT SUSPENDED' }}
+          <span class="status-pill" [class.error]="driverService.driver().appealStatus !== 'Pending'"
+            [class.pending]="driverService.driver().appealStatus === 'Pending'">
+            {{ driverService.driver().appealStatus === 'Pending'
+              ? 'APPEAL PENDING'
+              : (driverService.driver().complianceStatus === 'Rejected' ? 'APPLICATION DECLINED' : 'ACCOUNT SUSPENDED') }}
           </span>
           <h2 class="title mt-2">
-            {{ driverService.driver().complianceStatus === 'Rejected' ? 'Application Needs Review' : 'Account
-            Temporarily Suspended' }}
+            {{ driverService.driver().appealStatus === 'Pending'
+              ? 'Appeal Submitted'
+              : (driverService.driver().complianceStatus === 'Rejected' ? 'Application Needs Review' : 'Account Temporarily Suspended') }}
           </h2>
         </div>
       </div>
 
       <!-- Official Notice Card -->
       <div class="notice-card">
-        <span class="notice-title">OFFICIAL NOTICE</span>
+        <span class="notice-title">{{ driverService.driver().appealStatus === 'Pending' ? 'APPEAL STATUS' : 'OFFICIAL NOTICE' }}</span>
+        @if (driverService.driver().appealStatus === 'Pending') {
+        <p class="notice-msg">
+          Your appeal has been sent to TODA Admin and is waiting for review. You will get a notification once a decision is made.
+        </p>
+        } @else {
         <p class="notice-msg">
           "{{ driverService.driver().suspensionReason || 'Compliance documentation requires updated verification. Please
           submit an appeal below or visit the TODA office.' }}"
         </p>
+        }
       </div>
 
       <!-- Appeal Form Section -->
       <div class="appeal-card">
-        <h3 class="appeal-title">Submit a Reinstatement Appeal</h3>
-        <p class="appeal-sub">Provide explanation or attach supporting proof for TODA Admin review.</p>
+        <h3 class="appeal-title">{{ driverService.driver().appealStatus === 'Pending' ? 'Your Appeal' : 'Submit a Reinstatement Appeal' }}</h3>
+        <p class="appeal-sub">{{ driverService.driver().appealStatus === 'Pending' ? 'Appeal sent — pending review by TODA Admin.' : 'Provide explanation or attach supporting proof for TODA Admin review.' }}</p>
 
         @if (driverService.driver().appealStatus === 'Pending') {
         <div class="appeal-pending-box">

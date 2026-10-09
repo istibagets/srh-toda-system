@@ -1269,7 +1269,7 @@ class DashboardController extends Controller
                     'mtop_number'          => $d->mtop_number ?? 'N/A',
                     'compliance_status'    => $d->compliance_status ?? 'Approved',
                     'suspension_reason'    => $d->suspension_reason,
-                    'appeal_status'        => $d->appeal_status,
+                    'appeal_status'        => $d->appeal_status ? strtolower($d->appeal_status) : null,
                     'appeal_message'       => $d->appeal_message,
                     'appeal_attachments'   => collect($d->appeal_attachments ?? [])->map(function ($att) {
                         if (!is_array($att) || empty($att['url'])) return $att;

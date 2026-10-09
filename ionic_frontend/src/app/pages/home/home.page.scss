@@ -239,6 +239,16 @@
   }
 }
 
+.suspension-banner.appealed {
+  background: #fffbeb;
+  border-color: #fde68a;
+
+  .warning-icon-wrap {
+    background: #fef3c7;
+    color: #d97706;
+  }
+}
+
 .suspension-banner {
   width: 100%;
   background: #fff1f2;

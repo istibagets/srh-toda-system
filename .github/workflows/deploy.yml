@@ -95,6 +95,14 @@ jobs:
             echo "Syncing frontend assets to volume..."
             cp -r ionic_www/* ionic_frontend/www/ 2>/dev/null || true
 
+            echo "Syncing backend code into the app container..."
+            for d in app config database routes; do
+              if [ -d "\$d" ]; then
+                docker cp "\$d/." "srh_toda_app:/var/www/html/\$d/"
+              fi
+            done
+            docker exec srh_toda_app sh -c 'mkdir -p storage/framework/views storage/framework/cache storage/framework/sessions && chown -R www-data:www-data storage' 2>/dev/null || true
+
             echo "Updating Nginx configuration & Adminer assets..."
             docker cp nginx.conf srh_toda_app:/etc/nginx/http.d/default.conf 2>/dev/null || true
             docker cp laravel_backend/public/adminer.css srh_toda_app:/var/www/html/public/adminer.css 2>/dev/null || true

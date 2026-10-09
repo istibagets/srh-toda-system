@@ -293,6 +293,23 @@ class AuthController extends Controller
         // Broadcast to Admin only after OTP verification is complete
         if ($driver) {
             try {
+                \App\Models\Announcement::create([
+                    'created_by' => $user->id,
+                    'title' => "New Driver Application: {$driver->full_name}",
+                    'message' => "{$driver->full_name} (MTOP #{$driver->mtop_number}) verified their email and is waiting for document review.",
+                    'target_audience' => 'ADMIN',
+                ]);
+            } catch (\Throwable $e) {}
+            try {
+                app(\App\Services\PushService::class)->sendToRole(
+                    'admin',
+                    'New Driver Application',
+                    "{$driver->full_name} is waiting for document review.",
+                    '/',
+                    "application-{$driver->id}"
+                );
+            } catch (\Throwable $e) {}
+            try {
                 broadcast(new \App\Events\DriverApplicantUpdated($driver->id, 'registered'));
             } catch (\Throwable $e) {}
         }
