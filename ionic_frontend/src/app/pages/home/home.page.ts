@@ -3037,7 +3037,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
     this.lastMarkerTargetAt = nowMs;
     // Slightly longer than the fix interval: the next target re-aims mid-glide, so the marker
     // never reaches a stop between updates and moves at a steady pace.
-    duration = Math.min(1400, Math.max(duration, sinceLastTarget * 1.15));
+    duration = Math.min(1200, Math.max(220, sinceLastTarget * 1.05));
+    this.routeFollowsMarker = this.markerOwnsRoute();
 
     // A big jump (manual override tap, teleport) is not normal movement: glide there quickly
     // instead of crawling over ~1s.
@@ -3082,6 +3083,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       if (this.driverMarker) {
         this.driverMarker.setLngLat([currentLng, currentLat]);
       }
+      this.syncRouteStartToMarker(currentLng, currentLat, currentTime);
 
       if (progress < 1) {
         this.markerAnimRafId = requestAnimationFrame(step);
@@ -3093,6 +3095,44 @@ export class HomePage implements AfterViewInit, OnDestroy {
     };
 
     this.markerAnimRafId = requestAnimationFrame(step);
+  }
+
+  private routeFollowsMarker = false;
+  private lastRouteSyncAt = 0;
+
+  /** True when the routeline belongs to the tricycle marker (driver on a trip/returning, or passenger on an active ride). */
+  private markerOwnsRoute(): boolean {
+    if (this.authService.isPassenger()) {
+      const st = String(this.activePassengerRide()?.status || '').toLowerCase().trim();
+      return ['accepted', 'en_route', 'arrived', 'in_transit'].includes(st);
+    }
+    return !!this.driverService.activeTrip() || this.driverService.isReturning();
+  }
+
+  /**
+   * Keeps the visible routeline glued to the gliding tricycle: every frame the line starts at the
+   * marker's interpolated position (then continues through the snapped point and the rest of the
+   * route), so the line neither trails behind nor runs ahead of the icon.
+   */
+  private syncRouteStartToMarker(lng: number, lat: number, frameTime: number): void {
+    if (!this.routeFollowsMarker || !this.map) return;
+    const coords = this.currentActiveRouteCoordinates;
+    if (!coords || coords.length < 2) return;
+    if (frameTime - this.lastRouteSyncAt < 30) return; // ~30fps is plenty for a line
+    this.lastRouteSyncAt = frameTime;
+    try {
+      const source: any = this.map.getSource('terminal-return-route-source');
+      if (!source) return;
+      const dx = coords[0][0] - lng;
+      const dy = coords[0][1] - lat;
+      const lead: [number, number][] =
+        dx * dx + dy * dy > 1e-12 ? [[lng, lat], ...coords] : coords;
+      source.setData({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: lead },
+        properties: {},
+      });
+    } catch { }
   }
 
   private animatePassengerMarkerTo(targetLng: number, targetLat: number, duration = 450): void {
@@ -4082,7 +4122,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (this.authService.isPassenger()) return;
     const now = Date.now();
     // ~2 updates per second: the passenger's tricycle trails the driver by well under a second
-    if (now - this.lastBroadcastTime < 300) return;
+    if (now - this.lastBroadcastTime < 150) return;
     this.lastBroadcastTime = now;
 
     const dTrip = this.driverService.activeTrip();
