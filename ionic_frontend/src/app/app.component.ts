@@ -12,6 +12,7 @@ import { AttachmentViewerModalComponent } from './components/attachment-viewer-m
 import { MaintenanceOverlayComponent } from './components/maintenance-overlay/maintenance-overlay.component';
 import { PermissionService } from './services/permission.service';
 import { ToastGestureService } from './services/toast-gesture.service';
+import { TopBounceGuardService } from './services/top-bounce-guard.service';
 
 @Component({
   selector: 'app-root',
@@ -34,6 +35,7 @@ export class AppComponent {
   maintenanceService = inject(MaintenanceService);
   private permissionService = inject(PermissionService);
   private toastGestureService = inject(ToastGestureService);
+  private topBounceGuard = inject(TopBounceGuardService);
 
   readonly currentPath = signal<string>(
     typeof window !== 'undefined' ? window.location.pathname : ''
@@ -51,6 +53,9 @@ export class AppComponent {
 
     // Initialize universal swipe-to-dismiss for all toasts
     this.toastGestureService.init();
+
+    // No rubber-band stretch when pulling down at the top (keeps pull-to-refresh clean)
+    this.topBounceGuard.init();
 
     // -- REQUEST ALL PERMISSIONS IMMEDIATELY ON APP OPEN ---------------------
     // Fires before any routing, on every platform (web PWA, iOS Safari, Android).
