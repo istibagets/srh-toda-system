@@ -3097,6 +3097,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     this.markerAnimRafId = requestAnimationFrame(step);
   }
 
+  private passengerCompassPublished = 0;
   private routeFollowsMarker = false;
   private lastRouteSyncAt = 0;
 
@@ -3265,15 +3266,55 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (this.driverService.isReturning()) return false;
     if (this.currentActiveRouteCoordinates && this.currentActiveRouteCoordinates.length >= 2) return false;
 
-    if (this.authService.isPassenger()) {
-      const pRide = this.activePassengerRide();
-      if (pRide && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(String(pRide?.status || '').toLowerCase().trim())) {
-        return false;
-      }
-    }
-    // Drivers: the compass stays active on trips without a routeline (terminal walk-in / wayside);
-    // it is only disabled while a routeline exists (checked above) or when returning to terminal.
+    // Trips without a routeline (walk-in / typed drop-off, no pin) are free roam for everyone:
+    // the compass is only disabled while a routeline exists (checked above) or when returning.
     return true;
+  }
+
+  // --- Free-roam heading fusion -----------------------------------------------------------
+  // The phone compass is fine when standing still but swings wildly in a moving vehicle
+  // (engine/metal interference, phone tilt), and GPS bearing from tiny steps is noisy when slow.
+  // So: moving at speed → heading comes from the smoothed GPS course only; slow/stopped →
+  // compass only. Never both at once, which is what made the view "tweak" between directions.
+  private gpsCourse = { deg: 0, time: 0 };
+  private courseAnchor: { lat: number; lng: number; time: number } | null = null;
+
+  private gpsCourseActive(): boolean {
+    return Date.now() - this.gpsCourse.time < 2500;
+  }
+
+  private updateGpsCourse(lat: number, lng: number, reportedHeading: number | null, speed: number | null): number | null {
+    const now = Date.now();
+    const a = this.courseAnchor;
+    if (!a) {
+      this.courseAnchor = { lat, lng, time: now };
+      return null;
+    }
+    const dist = this.calculateDistanceMeters(a.lat, a.lng, lat, lng);
+    const dt = Math.max(0.2, (now - a.time) / 1000);
+    const hasSpeed = speed !== null && speed !== undefined && !isNaN(speed) && speed > 0;
+    const effSpeed = hasSpeed ? (speed as number) : dist / dt;
+    if (effSpeed < 2.5) {
+      // Slow / stopped: hand the heading back to the compass
+      if (now - a.time > 4000) this.courseAnchor = { lat, lng, time: now };
+      return null;
+    }
+
+    let course: number | null = null;
+    const validReported = reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading);
+    if (validReported && hasSpeed && (speed as number) > 2) {
+      course = reportedHeading as number;
+    } else if (dist >= 6) {
+      course = this.calculateBearing(a.lat, a.lng, lat, lng);
+    }
+    if (dist >= 6) this.courseAnchor = { lat, lng, time: now };
+    if (course === null) return this.gpsCourseActive() ? this.gpsCourse.deg : null;
+
+    const prev = this.gpsCourseActive() ? this.gpsCourse.deg : course;
+    const diff = ((course - prev + 540) % 360) - 180;
+    const deg = (prev + diff * 0.4 + 360) % 360;
+    this.gpsCourse = { deg, time: now };
+    return deg;
   }
 
   private createDriverBeamConeGeoJSON(centerLng: number, centerLat: number, headingDeg: number): any {
@@ -4074,26 +4115,30 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
 
     // 5. FREE ROAM (No active routeline)
-    let moveHeading = this.driverHeading();
-    if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 1.0) {
-      moveHeading = Math.round(reportedHeading);
-    } else if (this.driverLat() && this.driverLng()) {
-      const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), rawLat, rawLng));
-      if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00007 || Math.abs(rawLng - this.driverLng()) > 0.00007)) {
-        moveHeading = calc;
-      }
-    }
+    // Moving at speed → smoothed GPS course; otherwise keep the current (compass) heading
+    const course = this.updateGpsCourse(rawLat, rawLng, reportedHeading, speed);
+    const moveHeading = course !== null ? Math.round(course) : this.driverHeading();
 
     this.driverLat.set(rawLat);
     this.driverLng.set(rawLng);
 
-    // In 3D free-roam the compass is the sole authority over heading/cone — never let GPS
-    // sniffing override the sensor's smooth rotation.
     const is3D = this.mapControlState() === 3;
     const compassControls = is3D && this.isCompassControllingCamera;
-    const effectiveHeading = compassControls ? this.driverHeading() : moveHeading;
-    if (!compassControls) {
+    const effectiveHeading = moveHeading;
+    if (course !== null) {
       this.driverHeading.set(moveHeading);
+      this.compassLastBearing = course;
+      this.updateDriverHeadingCone(moveHeading);
+      // 3D free roam: the compass is not rotating the camera now, so the GPS course does
+      if (compassControls && this.map && !this.isUserPanned()) {
+        this.map.easeTo({
+          center: [rawLng, rawLat],
+          bearing: moveHeading,
+          pitch: 60,
+          duration: 450,
+          easing: (t: number) => t,
+        });
+      }
     }
 
     const distToTerminal = this.calculateDistanceMeters(rawLat, rawLng, this.TERMINAL_LAT, this.TERMINAL_LNG);
@@ -4225,14 +4270,13 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // Drivers on a trip WITHOUT a routeline (terminal walk-in / wayside) keep the compass;
     // a routeline (checked above) or returning to terminal locks bearing to the road instead.
 
-    // When PASSENGER has an ACTIVE TRIP with a routeline: the tricycle bearing must stay
-    // locked to the road direction. Device compass must NOT override it.
+    // Passenger on an active trip WITHOUT a routeline (free roam): the compass rotates only the
+    // camera; the tricycle marker keeps showing the driver's heading.
+    let passengerOnTrip = false;
     if (this.authService.isPassenger()) {
       const pRide = this.activePassengerRide();
       const pStatus = String(pRide?.status || '').toLowerCase().trim();
-      if (pRide && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(pStatus)) {
-        return;
-      }
+      passengerOnTrip = !!pRide && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(pStatus);
     }
 
     let rawHeading: number | null = null;
@@ -4246,6 +4290,13 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
 
     if (rawHeading === null || isNaN(rawHeading)) return;
+
+    // Moving at speed: the GPS course owns the heading (see updateGpsCourse); the compass only
+    // keeps its filter in sync so handing control back after stopping doesn't snap.
+    if (!passengerOnTrip && this.gpsCourseActive()) {
+      this.compassLastBearing = this.gpsCourse.deg;
+      return;
+    }
 
     const now = performance.now();
     // Sensor events arrive at 30–60Hz; process at ~30fps
@@ -4261,7 +4312,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     // Hysteresis: only publish a new heading once it has moved a few degrees from the last
     // published one, so a held device stays perfectly still.
-    const published = this.driverHeading();
+    const published = passengerOnTrip ? this.passengerCompassPublished : this.driverHeading();
     const pubDiff = Math.abs(((smoothed - published + 540) % 360) - 180);
     if (pubDiff < 3) {
       this.compassLastBearing = smoothed;
@@ -4270,10 +4321,13 @@ export class HomePage implements AfterViewInit, OnDestroy {
     this.compassLastBearing = smoothed;
     const smoothedHeading = Math.round(smoothed);
 
-    this.driverHeading.set(smoothedHeading);
-
-    // Rotate visual vehicle cone beam marker (CSS-transitioned)
-    this.updateDriverHeadingCone(smoothedHeading);
+    if (passengerOnTrip) {
+      this.passengerCompassPublished = smoothedHeading;
+    } else {
+      this.driverHeading.set(smoothedHeading);
+      // Rotate visual vehicle cone beam marker (CSS-transitioned)
+      this.updateDriverHeadingCone(smoothedHeading);
+    }
 
     // In 3D Compass View (mapControlState === 3), rotate camera and lock 60deg tilt (pitch).
     // Camera updates are limited to ~12fps with short linear easing so rotation stays fluid
@@ -4284,9 +4338,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
         this.compassRafId = requestAnimationFrame(() => {
           this.compassRafId = null;
           if (this.map && this.mapControlState() === 3 && !this.isUserPanned()) {
+            const m = passengerOnTrip ? this.markerCurrentLngLat : null;
             this.map.easeTo({
-              center: [this.driverLng(), this.driverLat()],
-              bearing: this.driverHeading(),
+              center: m ? [m[0], m[1]] : [this.driverLng(), this.driverLat()],
+              bearing: passengerOnTrip ? this.passengerCompassPublished : this.driverHeading(),
               pitch: 60,
               duration: 140,
               easing: (t: number) => t,
