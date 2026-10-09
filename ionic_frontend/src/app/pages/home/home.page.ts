@@ -2520,7 +2520,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
           // Routed trip: behave exactly like returning to the terminal. The vehicle always locks
           // onto the NEAREST ROAD (even when the tap is in an open field) and the route starts there.
           if (!isWalkInOrWayside && hasTargetCoord) {
-            this.clearReturnRoutePolyline(); // drop the stale line before the new one arrives
+            // Like the terminal return: the current line stays visible until the new road route
+            // replaces it in one step (never blank in between).
             const locked = await this.applyRoadRouteAndSnap(rawLng, rawLat, {
               lng: targetLng,
               lat: targetLat,
