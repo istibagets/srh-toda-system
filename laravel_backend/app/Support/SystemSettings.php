@@ -182,6 +182,62 @@ class SystemSettings
         ];
     }
 
+    /**
+     * Terminal walk-in and wayside destinations. Each one has a fixed estimated fare for 1, 2, 3
+     * and 4 passengers set by the Superadministrator; the fare is only a base for earnings records.
+     */
+    public static function defaultWalkinZones(): array
+    {
+        $rows = [
+            ['Main Gate Guard House', 50], ['Clubhouse', 50], ['Santa Rosa Public Market', 60], ['SM Cabanatuan', 120],
+            ['Santa Rosa Municipal Hall', 60], ['Brgy. La Fuente', 50], ['Brgy. Cojuangco', 50], ['Brgy. Mapalad', 75],
+            ['Brgy. Rizal', 75], ['Robinsons Cabanatuan', 140], ['Cabanatuan City Hall', 165],
+            ['Zaragoza Public Market', 250], ['San Leonardo Public Market', 190], ['Gapan City Public Market', 260],
+        ];
+        return array_map(fn ($r) => ['name' => $r[0], 'fares' => [$r[1], $r[1], $r[1] + 5, $r[1] + 10]], $rows);
+    }
+
+    public static function getWalkinZones(): array
+    {
+        $raw = self::get('walkin_zones_json');
+        if ($raw) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        return self::defaultWalkinZones();
+    }
+
+    /** Keeps only a name and four non-negative fares per zone. */
+    public static function setWalkinZones(array $zones): void
+    {
+        $clean = [];
+        foreach ($zones as $z) {
+            $name = trim((string) ($z['name'] ?? ''));
+            $fares = $z['fares'] ?? null;
+            if ($name === '' || !is_array($fares) || count($fares) !== 4) {
+                continue;
+            }
+            $fares = array_map(fn ($f) => max(0, (float) $f), array_values($fares));
+            $clean[] = ['name' => mb_substr($name, 0, 80), 'fares' => $fares];
+        }
+        self::set('walkin_zones_json', json_encode($clean));
+    }
+
+    /** Fixed fare of a walk-in zone for a passenger count, or null when the destination is not a zone. */
+    public static function walkinFare(?string $destName, int $pax): ?float
+    {
+        $needle = mb_strtolower(trim((string) $destName));
+        foreach (self::getWalkinZones() as $z) {
+            if (mb_strtolower(trim((string) ($z['name'] ?? ''))) === $needle) {
+                $i = min(max($pax, 1), 4) - 1;
+                return isset($z['fares'][$i]) ? (float) $z['fares'][$i] : null;
+            }
+        }
+        return null;
+    }
+
     public static function getLandmarks(): array
     {
         $raw = self::get('landmarks_json');

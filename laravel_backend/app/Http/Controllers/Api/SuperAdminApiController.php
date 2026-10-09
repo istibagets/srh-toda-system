@@ -397,13 +397,7 @@ class SuperAdminApiController extends Controller
         return response()->json([
             'status' => 'success',
             'cms'    => [
-                'fare_matrix' => [
-                    'base_fare'           => (float) SystemSettings::get('fare_matrix.base_fare', 50.00),
-                    'per_km_rate'         => (float) SystemSettings::get('fare_matrix.per_km_rate', 3.50),
-                    'night_differential'  => (float) SystemSettings::get('fare_matrix.night_differential', 5.00),
-                    'surge_multiplier'    => (float) SystemSettings::get('fare_matrix.surge_multiplier', 1.0),
-                    'terminal_fee'        => (float) SystemSettings::get('fare_matrix.terminal_fee', 2.00),
-                ],
+                'walkin_zones' => SystemSettings::getWalkinZones(),
                 'geofencing' => [
                     'terminal_lat'    => (float) SystemSettings::get('geofencing.terminal_lat', 15.429550175641715),
                     'terminal_lng'    => (float) SystemSettings::get('geofencing.terminal_lng', 120.92240292427664),
@@ -463,10 +457,8 @@ class SuperAdminApiController extends Controller
             }
         }
 
-        if ($request->has('fare_matrix')) {
-            foreach ($request->input('fare_matrix') as $key => $val) {
-                SystemSettings::set("fare_matrix.{$key}", (string)$val);
-            }
+        if ($request->has('walkin_zones') && is_array($request->input('walkin_zones'))) {
+            SystemSettings::setWalkinZones($request->input('walkin_zones'));
         }
 
         if ($request->has('landmarks')) {

@@ -359,13 +359,7 @@ class DashboardController extends Controller
             'boundary_name'   => (string) \App\Support\SystemSettings::get('geofencing.boundary_name', 'Santa Rosa Homes TODA Zone'),
         ];
 
-        $data['fare_matrix'] = [
-            'base_fare'           => (float) \App\Support\SystemSettings::get('fare_matrix.base_fare', 50.00),
-            'per_km_rate'         => (float) \App\Support\SystemSettings::get('fare_matrix.per_km_rate', 3.50),
-            'night_differential'  => (float) \App\Support\SystemSettings::get('fare_matrix.night_differential', 5.00),
-            'surge_multiplier'    => (float) \App\Support\SystemSettings::get('fare_matrix.surge_multiplier', 1.00),
-            'terminal_fee'        => (float) \App\Support\SystemSettings::get('fare_matrix.terminal_fee', 2.00),
-        ];
+        $data['walkin_zones'] = \App\Support\SystemSettings::getWalkinZones();
 
         $data['announcements'] = $announcements;
 
@@ -556,8 +550,9 @@ class DashboardController extends Controller
         }
 
         $destination = $request->input('destination', 'Passenger Specified (Walk-In)');
-        $passengerCount = (int) $request->input('passenger_count', 1);
-        $fare = (float) $request->input('fare', 30.00);
+        $passengerCount = max(1, min(4, (int) $request->input('passenger_count', 1)));
+        // Fixed fare of the walk-in zone set by the Superadministrator; the app's amount is only a fallback
+        $fare = \App\Support\SystemSettings::walkinFare($destination, $passengerCount) ?? (float) $request->input('fare', 30.00);
 
         // Create ride in database
         $ride = Ride::create([
@@ -691,7 +686,8 @@ class DashboardController extends Controller
         }
 
         $destination = $request->input('destination', 'Wayside Passenger');
-        $fare = (float) $request->input('fare', 25.00);
+        $passengerCount = max(1, min(4, (int) $request->input('passenger_count', 1)));
+        $fare = \App\Support\SystemSettings::walkinFare($destination, $passengerCount) ?? (float) $request->input('fare', 25.00);
 
         $ride = Ride::create([
             'passenger_id'    => null,

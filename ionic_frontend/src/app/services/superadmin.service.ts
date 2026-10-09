@@ -1,3 +1,4 @@
+import { DEFAULT_WALKIN_ZONES, WalkinZone } from '../utils/fare';
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -71,13 +72,8 @@ export interface LandmarkItem {
 }
 
 export interface CmsData {
-  fare_matrix: {
-    base_fare: number;
-    per_km_rate: number;
-    night_differential: number;
-    surge_multiplier: number;
-    terminal_fee: number;
-  };
+  /** Terminal walk-in destinations with fixed fares for 1 to 4 passengers. */
+  walkin_zones?: WalkinZone[];
   geofencing: {
     terminal_lat: number;
     terminal_lng: number;
@@ -256,13 +252,7 @@ export class SuperadminService {
       }
     } catch (e) {
       this.cms.set({
-        fare_matrix: {
-          base_fare: 50.0,
-          per_km_rate: 3.5,
-          night_differential: 5.0,
-          surge_multiplier: 1.0,
-          terminal_fee: 2.0,
-        },
+        walkin_zones: DEFAULT_WALKIN_ZONES.map((z) => ({ ...z, fares: [...z.fares] })),
         geofencing: {
           terminal_lat: 15.429550175641715,
           terminal_lng: 120.92240292427664,

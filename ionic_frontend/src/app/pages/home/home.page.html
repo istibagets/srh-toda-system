@@ -256,7 +256,7 @@
     (dragSync)="onSheetDragSync($event)" (dragStart)="onSheetDragStart()" (dragEnd)="onSheetDragEnd()"></app-queue-card>
 
   <!-- 6. TERMINAL WALK-IN & WAYSIDE MODAL -->
-  <app-terminal-ride-modal [isOpen]="showTerminalModal()" [isWayside]="isWaysideModal()"
+  <app-terminal-ride-modal [isOpen]="showTerminalModal()" [isWayside]="isWaysideModal()" [zones]="walkinZones()"
     (closeModal)="closeTerminalModal()" (confirmRide)="onTerminalRideConfirmed($event)"></app-terminal-ride-modal>
   }
 

@@ -52,6 +52,7 @@ import {
   cartOutline,
   pinOutline,
 } from 'ionicons/icons';
+import { DEFAULT_WALKIN_ZONES, WalkinZone } from '../../utils/fare';
 import { SuperadminService, SuperAdminUser, CmsData, LandmarkItem } from '../../services/superadmin.service';
 import { AuthService } from '../../services/auth.service';
 import { MaintenanceService } from '../../services/maintenance.service';
@@ -160,6 +161,18 @@ export class SuperadminPage implements OnInit {
       lng: 120.95436226867764,
     },
   ]);
+  // Terminal walk-in destinations: a fixed fare for 1, 2, 3 and 4 passengers each
+  walkinZones = signal<WalkinZone[]>(DEFAULT_WALKIN_ZONES.map((z) => ({ ...z, fares: [...z.fares] })));
+  editingWalkinIndex = signal<number | null>(null);
+  showWalkinForm = signal<boolean>(false);
+  walkinForm: FormGroup = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    fare1: [50, [Validators.required, Validators.min(0)]],
+    fare2: [50, [Validators.required, Validators.min(0)]],
+    fare3: [55, [Validators.required, Validators.min(0)]],
+    fare4: [60, [Validators.required, Validators.min(0)]],
+  });
+
   showLandmarkModal = signal<boolean>(false);
   editingLandmarkIndex = signal<number | null>(null);
   landmarkForm: FormGroup;
@@ -299,11 +312,6 @@ export class SuperadminPage implements OnInit {
       hotline_phone: ['(044) 791-2345 / 0917-123-4567', [Validators.required]],
       support_email: ['srh.toda.official@gmail.com', [Validators.required, Validators.email]],
 
-      base_fare: [50.0, [Validators.required, Validators.min(0)]],
-      per_km_rate: [3.5, [Validators.required, Validators.min(0)]],
-      night_differential: [5.0, [Validators.required, Validators.min(0)]],
-      surge_multiplier: [1.0, [Validators.required, Validators.min(1)]],
-      terminal_fee: [2.0, [Validators.required, Validators.min(0)]],
       terminal_lat: [15.429550175641715, [Validators.required]],
       terminal_lng: [120.92240292427664, [Validators.required]],
       terminal_radius: [35, [Validators.required, Validators.min(10)]],
@@ -371,6 +379,7 @@ export class SuperadminPage implements OnInit {
 
     const cms = this.superAdminService.cms();
     if (cms) {
+      if (Array.isArray(cms.walkin_zones)) this.walkinZones.set(cms.walkin_zones);
       this.cmsForm.patchValue({
         logo_url: cms.branding?.logo_url || 'assets/images/srh-logo.png',
         app_title: cms.branding?.app_title ?? 'SRH LINK TODA',
@@ -381,11 +390,6 @@ export class SuperadminPage implements OnInit {
         hotline_phone: cms.branding?.hotline_phone ?? '(044) 791-2345 / 0917-123-4567',
         support_email: cms.branding?.support_email ?? 'srh.toda.official@gmail.com',
 
-        base_fare: cms.fare_matrix?.base_fare ?? 50.0,
-        per_km_rate: cms.fare_matrix?.per_km_rate ?? 3.5,
-        night_differential: cms.fare_matrix?.night_differential ?? 5.0,
-        surge_multiplier: cms.fare_matrix?.surge_multiplier ?? 1.0,
-        terminal_fee: cms.fare_matrix?.terminal_fee ?? 2.0,
         terminal_lat: cms.geofencing?.terminal_lat ?? 15.429550175641715,
         terminal_lng: cms.geofencing?.terminal_lng ?? 120.92240292427664,
         terminal_radius: cms.geofencing?.terminal_radius ?? 35,
@@ -662,13 +666,6 @@ export class SuperadminPage implements OnInit {
           hotline_phone: v.hotline_phone,
           support_email: v.support_email,
         },
-        fare_matrix: {
-          base_fare: +v.base_fare,
-          per_km_rate: +v.per_km_rate,
-          night_differential: +v.night_differential,
-          surge_multiplier: +v.surge_multiplier,
-          terminal_fee: +v.terminal_fee,
-        },
         geofencing: {
           terminal_lat: +v.terminal_lat,
           terminal_lng: +v.terminal_lng,
@@ -690,6 +687,76 @@ export class SuperadminPage implements OnInit {
     } finally {
       this.isSavingCms.set(false);
     }
+  }
+
+  openAddWalkinZone(): void {
+    this.editingWalkinIndex.set(null);
+    this.walkinForm.reset({ name: '', fare1: 50, fare2: 50, fare3: 55, fare4: 60 });
+    this.showWalkinForm.set(true);
+  }
+
+  openEditWalkinZone(idx: number): void {
+    const z = this.walkinZones()[idx];
+    if (!z) return;
+    this.editingWalkinIndex.set(idx);
+    this.walkinForm.reset({ name: z.name, fare1: z.fares[0], fare2: z.fares[1], fare3: z.fares[2], fare4: z.fares[3] });
+    this.showWalkinForm.set(true);
+  }
+
+  cancelWalkinForm(): void {
+    this.showWalkinForm.set(false);
+    this.editingWalkinIndex.set(null);
+  }
+
+  private async persistWalkinZones(list: WalkinZone[], okMessage: string): Promise<void> {
+    this.walkinZones.set(list);
+    try {
+      await this.superAdminService.updateCmsData({ walkin_zones: list });
+      this.showToast(okMessage, 'success');
+    } catch {
+      this.showToast('Could not save the walk-in destinations. Please try again.', 'danger');
+    }
+  }
+
+  async saveWalkinZone(): Promise<void> {
+    if (this.walkinForm.invalid) {
+      this.walkinForm.markAllAsTouched();
+      return;
+    }
+    const v = this.walkinForm.value;
+    const zone: WalkinZone = {
+      name: String(v.name).trim(),
+      fares: [Number(v.fare1), Number(v.fare2), Number(v.fare3), Number(v.fare4)],
+    };
+    const list = [...this.walkinZones()];
+    const idx = this.editingWalkinIndex();
+    if (idx === null) {
+      list.push(zone);
+    } else {
+      list[idx] = zone;
+    }
+    this.cancelWalkinForm();
+    await this.persistWalkinZones(list, `Walk-in destination "${zone.name}" saved.`);
+  }
+
+  async deleteWalkinZone(idx: number): Promise<void> {
+    const zone = this.walkinZones()[idx];
+    if (!zone) return;
+    const alert = await this.alertCtrl.create({
+      header: 'Delete Destination?',
+      message: `Remove "${zone.name}" from the terminal walk-in destinations?`,
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Delete',
+          role: 'destructive',
+          handler: () => {
+            void this.persistWalkinZones(this.walkinZones().filter((_, i) => i !== idx), `"${zone.name}" removed.`);
+          },
+        },
+      ],
+    });
+    await alert.present();
   }
 
   openAddLandmarkModal(): void {

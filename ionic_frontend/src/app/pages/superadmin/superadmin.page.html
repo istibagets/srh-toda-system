@@ -674,42 +674,86 @@
           </div>
 
           <form [formGroup]="cmsForm" class="cms-form-stack">
-            <!-- Tariff Rates -->
+            <!-- Terminal Walk-In Destinations -->
             <div class="cms-card">
-              <div class="cms-card-header">
-                <ion-icon name="cash-outline"></ion-icon>
-                <div>
-                  <h3 class="cms-card-title">Municipal Distance Tariffs &amp; Fees</h3>
-                  <p class="cms-card-desc">Standard fare calculations applied to all dispatched passenger rides</p>
+              <div class="cms-card-header flex-between">
+                <div class="flex-align-center gap-2">
+                  <ion-icon name="cash-outline"></ion-icon>
+                  <div>
+                    <h3 class="cms-card-title">Terminal Walk-In Destinations &amp; Fares</h3>
+                    <p class="cms-card-desc">Estimated fixed fare per destination for 1, 2, 3 and 4 passengers, used as the base for earnings when a driver starts a walk-in or wayside trip</p>
+                  </div>
+                </div>
+                <div class="header-btns-group">
+                  <button type="button" class="add-user-btn" (click)="openAddWalkinZone()">
+                    <ion-icon name="add-outline"></ion-icon>
+                    <span>Add Destination</span>
+                  </button>
                 </div>
               </div>
               <div class="cms-card-body">
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label class="form-label">Base Fare Rate (₱)</label>
-                    <input type="number" formControlName="base_fare" step="0.5" class="custom-form-input" />
-                    <span class="input-hint">Covers initial 1.0 kilometer</span>
+                @if (showWalkinForm()) {
+                  <div [formGroup]="walkinForm" class="cms-form-stack">
+                    <div class="form-group">
+                      <label class="form-label">Destination / Zone Name *</label>
+                      <input type="text" formControlName="name" placeholder="e.g. Santa Rosa Public Market" class="custom-form-input" />
+                    </div>
+                    <div class="form-row-2">
+                      <div class="form-group">
+                        <label class="form-label">1 Passenger (₱) *</label>
+                        <input type="number" formControlName="fare1" step="5" min="0" class="custom-form-input" />
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">2 Passengers (₱) *</label>
+                        <input type="number" formControlName="fare2" step="5" min="0" class="custom-form-input" />
+                      </div>
+                    </div>
+                    <div class="form-row-2">
+                      <div class="form-group">
+                        <label class="form-label">3 Passengers (₱) *</label>
+                        <input type="number" formControlName="fare3" step="5" min="0" class="custom-form-input" />
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">4 Passengers (₱) *</label>
+                        <input type="number" formControlName="fare4" step="5" min="0" class="custom-form-input" />
+                      </div>
+                    </div>
+                    <div class="header-btns-group">
+                      <button type="button" class="preset-btn" (click)="cancelWalkinForm()"><span>Cancel</span></button>
+                      <button type="button" class="add-user-btn" (click)="saveWalkinZone()"><span>Save Destination</span></button>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label">Per-Kilometer Increment (₱/km)</label>
-                    <input type="number" formControlName="per_km_rate" step="0.25" class="custom-form-input" />
-                    <span class="input-hint">Additional distance increments</span>
-                  </div>
+                }
+                <div class="landmarks-admin-table-wrap">
+                  <table class="sa-table">
+                    <thead>
+                      <tr>
+                        <th>Destination</th>
+                        <th>1 Pax</th>
+                        <th>2 Pax</th>
+                        <th>3 Pax</th>
+                        <th>4 Pax</th>
+                        <th class="text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (z of walkinZones(); track z.name; let idx = $index) {
+                        <tr>
+                          <td><span class="user-name-text">{{ z.name }}</span></td>
+                          @for (f of z.fares; track $index) {
+                            <td><span class="fare-tag-badge">₱{{ f.toFixed(0) }}</span></td>
+                          }
+                          <td class="text-right">
+                            <button type="button" class="preset-btn" (click)="openEditWalkinZone(idx)"><span>Edit</span></button>
+                            <button type="button" class="preset-btn" (click)="deleteWalkinZone(idx)"><span>Delete</span></button>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="6">No destinations yet. Drivers will see the built-in list until one is added.</td></tr>
+                      }
+                    </tbody>
+                  </table>
                 </div>
-
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label class="form-label">Night Differential (₱)</label>
-                    <input type="number" formControlName="night_differential" step="1" class="custom-form-input" />
-                    <span class="input-hint">10:00 PM to 5:00 AM differential</span>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">TODA Terminal Fee (₱)</label>
-                    <input type="number" formControlName="terminal_fee" step="0.5" class="custom-form-input" />
-                    <span class="input-hint">Terminal maintenance share per ride</span>
-                  </div>
-                </div>
-
               </div>
             </div>
 

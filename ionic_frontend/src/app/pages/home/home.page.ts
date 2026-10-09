@@ -52,6 +52,7 @@ import {
 } from 'ionicons/icons';
 import { DriverService } from '../../services/driver.service';
 import { RealtimeService } from '../../services/realtime.service';
+import { DEFAULT_WALKIN_ZONES, WalkinZone, normalizeWalkinZones } from '../../utils/fare';
 import { AttachmentViewerService } from '../../services/attachment-viewer.service';
 import { DriverHeaderComponent } from '../../components/driver-header/driver-header.component';
 import { DutyButtonComponent } from '../../components/duty-button/duty-button.component';
@@ -253,6 +254,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
     { name: 'Santa Rosa Public Market', fare: 60, icon: 'storefront-outline', color: 'purple', desc: 'Town Center & Public Market Terminal', lat: 15.42469999648076, lng: 120.93842748892547 },
     { name: 'SM Cabanatuan', fare: 120, icon: 'cart-outline', color: 'blue', desc: 'SM City Cabanatuan Terminal & Mall Complex', lat: 15.467008627792355, lng: 120.95436226867764 },
   ]);
+
+  /** Terminal walk-in destinations and fixed fares set by the Superadministrator. */
+  readonly walkinZones = signal<WalkinZone[]>(DEFAULT_WALKIN_ZONES);
 
   private readonly PASSENGER_RIDE_KEY = 'srh_passenger_active_ride';
   showBookingModal = signal<boolean>(false);
@@ -2077,6 +2081,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
             this.initTerminalGeofence(this.map);
           }
         }
+        const walkin = normalizeWalkinZones(data?.walkin_zones);
+        if (walkin.length > 0) this.walkinZones.set(walkin);
         this.driverService.syncFromDashboard(data);
 
         if (this.authService.isPassenger()) {
