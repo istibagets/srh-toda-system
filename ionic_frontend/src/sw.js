@@ -111,7 +111,26 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, notificationOptions)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // The app is open and on screen: it already shows its own in-app toast/notification,
+      // so don't also raise a system banner.
+      const appIsVisible = clientList.some((c) => c.visibilityState === 'visible');
+      if (!appIsVisible) {
+        return self.registration.showNotification(data.title, notificationOptions);
+      }
+
+      // Apple's WebKit requires every push to show a notification (silent pushes can get the
+      // subscription revoked), so on iOS/iPadOS show it quietly and dismiss it right away.
+      const isApple = /iPhone|iPad|iPod/.test(self.navigator.userAgent || '');
+      if (!isApple) return undefined;
+
+      return self.registration
+        .showNotification(data.title, { ...notificationOptions, silent: true, requireInteraction: false, tag: 'srh-foreground-' + Date.now() })
+        .then(() => self.registration.getNotifications())
+        .then((list) => {
+          list.filter((n) => (n.tag || '').indexOf('srh-foreground-') === 0).forEach((n) => setTimeout(() => n.close(), 400));
+        });
+    })
   );
 });
 
