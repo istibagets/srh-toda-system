@@ -477,15 +477,29 @@ body > .sortable-fallback,
     transform-origin: center center;
     will-change: transform;
     transition: transform 0.22s cubic-bezier(0.25, 1, 0.5, 1);
-    transform-style: preserve-3d;
     z-index: 5;
+
+    /* Soft ground shadow as a plain radial gradient. CSS drop-shadow filters on a rotating
+       element render as a hard rectangular box on iOS Safari, so none are used here. */
+    &::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -46%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0.12) 55%, rgba(0, 0, 0, 0) 72%);
+      pointer-events: none;
+    }
 
     .tricycle-puck-img {
       width: 44px;
       height: 44px;
       object-fit: contain;
       display: block;
-      filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
+      position: relative;
       transition: filter 0.35s ease, opacity 0.35s ease;
       pointer-events: none;
       user-select: none;
@@ -501,7 +515,7 @@ body > .sortable-fallback,
     }
 
     .driver-tricycle-puck .tricycle-puck-img {
-      filter: grayscale(100%) opacity(0.65) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+      filter: grayscale(100%) opacity(0.65);
     }
   }
 
@@ -512,9 +526,6 @@ body > .sortable-fallback,
       display: block;
     }
 
-    .driver-tricycle-puck .tricycle-puck-img {
-      filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
-    }
   }
 }
 
