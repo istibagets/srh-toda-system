@@ -8,26 +8,7 @@
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
 
-  .header-toolbar {
-    --background: transparent;
-    --border-width: 0;
-    padding: 0.85rem 1rem 0.85rem;
-  }
 
-  .header-title-group {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-
-    .header-title {
-      font-size: 1.45rem;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0;
-      letter-spacing: -0.03em;
-    }
-  }
 
   .period-tab-bar {
     display: flex;

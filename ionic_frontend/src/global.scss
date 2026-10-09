@@ -658,3 +658,65 @@ ion-refresher {
 
 
 
+
+/* ══════════════════════════════════════════════════════════════ */
+/* UNIFIED PAGE HEADER (History, Stats, Admin, Saved, Profile)    */
+/* Same height, title size and position on every page; clears the */
+/* iPhone notch / status bar via the safe-area inset.             */
+/* ══════════════════════════════════════════════════════════════ */
+ion-header.srh-page-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+
+  ion-toolbar.header-toolbar {
+    --background: transparent;
+    --border-width: 0;
+    --min-height: 0;
+    --padding-top: 0;
+    --padding-bottom: 0;
+    --padding-start: 0;
+    --padding-end: 0;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 0.75rem)
+      max(1rem, env(safe-area-inset-right, 0px))
+      0.75rem
+      max(1rem, env(safe-area-inset-left, 0px)) !important;
+  }
+
+  .srh-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .srh-header-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: clamp(1.15rem, 5.6vw, 1.4rem);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Controls under the title (search box, period tabs) */
+  .history-search-container,
+  .period-tab-bar {
+    margin-top: 0.75rem;
+  }
+
+  .srh-header-row button {
+    flex-shrink: 0;
+    height: 38px;
+    min-width: 38px;
+    box-sizing: border-box;
+  }
+}
+

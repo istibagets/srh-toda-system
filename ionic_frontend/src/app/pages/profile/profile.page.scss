@@ -2,31 +2,8 @@
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
 
-  .header-toolbar {
-    --background: transparent;
-    --border-width: 0;
-    padding: 0.65rem 1rem;
-  }
 
-  .header-content-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-  }
 
-  .header-title-group {
-    display: flex;
-    flex-direction: column;
-
-    .header-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0;
-      letter-spacing: -0.03em;
-    }
-  }
 
   .header-settings-btn {
     width: 38px;

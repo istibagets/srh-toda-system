@@ -1,11 +1,9 @@
-<ion-header class="ion-no-border srh-profile-header">
+<ion-header class="ion-no-border srh-page-header srh-profile-header">
   <ion-toolbar class="header-toolbar">
-    <div class="header-content-wrapper">
-      <div class="header-title-group">
-        <h1 class="header-title">
+    <div class="srh-header-row">
+      <h1 class="srh-header-title">
           {{ authService.isPassenger() ? 'Passenger Profile' : (authService.isAdmin() ? 'Admin Profile' : 'Driver Profile') }}
         </h1>
-      </div>
       <button type="button" class="header-settings-btn" (click)="openSettingsModal()" title="App Settings">
         <ion-icon name="settings-outline"></ion-icon>
       </button>

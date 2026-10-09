@@ -7,34 +7,8 @@
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
 
-  .header-toolbar {
-    --background: transparent;
-    --border-width: 0;
-    padding: 0.85rem 1rem 0.85rem;
-  }
 
-  .header-content-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    gap: 0.5rem;
-  }
 
-  .header-title-group {
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    .header-title {
-      font-size: 1.45rem;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0;
-      letter-spacing: -0.03em;
-      line-height: 1.2;
-    }
-  }
 
   .header-action-btn-group {
     display: flex;

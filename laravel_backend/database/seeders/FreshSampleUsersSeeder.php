@@ -30,14 +30,14 @@ class FreshSampleUsersSeeder extends Seeder
         $password = 'admin123';
 
         // Admin
-        $steve = $this->createUser('Steve', 'steve@gmail.com', 'admin', $password);
+        $steve = $this->createUser('Steve Gates Roquero', 'steve@gmail.com', 'admin', $password);
         $this->createDriverProfile($steve, '100001', 'Approved');
 
         // Named drivers
         $named = [
-            ['Nathane', 'nathane@gmail.com', '100002', 'Approved'],
-            ['Basty',   'basty@gmail.com',   '100003', 'Approved'],
-            ['Ernest',  'ernest@gmail.com',  '100004', 'Pending'],
+            ['Nathane Martin', 'nathane@gmail.com', '100002', 'Approved'],
+            ['Ryan Busty Paras', 'basty@gmail.com',   '100003', 'Approved'],
+            ['Ernest Win Montes', 'ernest@gmail.com',  '100004', 'Pending'],
         ];
         foreach ($named as [$name, $email, $mtop, $status]) {
             $user = $this->createUser($name, $email, 'driver', $password);
@@ -45,14 +45,22 @@ class FreshSampleUsersSeeder extends Seeder
         }
 
         // 5 passengers
-        for ($i = 1; $i <= 5; $i++) {
-            $this->createUser("Passenger {$i}", "passenger{$i}@gmail.com", 'passenger', $password);
+        $passengerNames = ['Maria Clarissa Santos', 'Juan Miguel Dela Cruz', 'Angelica Mae Villanueva', 'Jose Rafael Bautista', 'Rosario Grace Mendoza'];
+        foreach ($passengerNames as $i => $name) {
+            $n = $i + 1;
+            $this->createUser($name, "passenger{$n}@gmail.com", 'passenger', $password);
         }
 
         // 5 more drivers: 2 approved, 1 pending, 2 rejected
-        $extraStatuses = [1 => 'Approved', 2 => 'Approved', 3 => 'Pending', 4 => 'Rejected', 5 => 'Rejected'];
-        foreach ($extraStatuses as $i => $status) {
-            $user = $this->createUser("Driver {$i}", "driver{$i}@gmail.com", 'driver', $password);
+        $extraDrivers = [
+            1 => ['Ricardo Manuel Dalisay', 'Approved'],
+            2 => ['Eduardo Santiago Reyes', 'Approved'],
+            3 => ['Romeo Andres Pascual', 'Pending'],
+            4 => ['Danilo Cruz Aquino', 'Rejected'],
+            5 => ['Ferdinand Jose Navarro', 'Rejected'],
+        ];
+        foreach ($extraDrivers as $i => [$name, $status]) {
+            $user = $this->createUser($name, "driver{$i}@gmail.com", 'driver', $password);
             $this->createDriverProfile($user, (string) (200000 + $i), $status);
         }
 
@@ -162,9 +170,8 @@ class FreshSampleUsersSeeder extends Seeder
     {
         mt_srand(2026);
         $passengers = User::where('role', 'passenger')->get();
-        $drivers = Driver::where('compliance_status', 'Approved')
-            ->whereHas('user', fn ($q) => $q->where('role', 'driver'))
-            ->get();
+        // Every approved driver profile, including the admin who also drives.
+        $drivers = Driver::where('compliance_status', 'Approved')->get();
         $tags = ['Punctual', 'Polite Driver', 'Clean Tricycle', 'Safe Driving', 'Fair Fare'];
         $comments = [
             5 => ['Very courteous and safe driving!', 'Fast and polite, thank you.'],
