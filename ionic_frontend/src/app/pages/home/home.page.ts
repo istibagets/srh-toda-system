@@ -1267,7 +1267,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
    * Snaps any coordinate immediately to the nearest roadway centerline in 0ms.
    * Completely prevents vehicle marker from ever appearing in fields or outside road lane.
    */
-  snapToNearestRoad(lng: number, lat: number, snapToActiveRoute = true): [number, number] {
+  snapToNearestRoad(lng: number, lat: number, snapToActiveRoute = true, maxSnapMeters = 30): [number, number] {
     let nearestPoint: [number, number] = [lng, lat];
     let minDistanceSq = Infinity; // stored in metres²
 
@@ -1380,7 +1380,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // projectPointOnSegment returns distSq in metres² so 30m → threshold = 900.
     // This is the correct unit — both vector-tile and ROAD_NETWORKS paths use the
     // same metres² formula in projectPointOnSegment (111320 * cos(lat) for lng, 110540 for lat).
-    const SNAP_THRESHOLD_M2 = 900; // 30m²
+    const SNAP_THRESHOLD_M2 = maxSnapMeters * maxSnapMeters;
     if (minDistanceSq > SNAP_THRESHOLD_M2) {
       return [lng, lat]; // Too far from any road — keep original tap coordinates
     }
@@ -1869,7 +1869,30 @@ export class HomePage implements AfterViewInit, OnDestroy {
             if (!this.driverMarker) {
               this.syncPassengerDriverTricycleMarker();
             }
-            this.animateDriverMarkerTo(loc.lng, loc.lat, drvHeading, 350);
+            // Lock the icon onto the road exactly like the driver's view: on the routeline when there
+            // is one, otherwise on the nearest road; always facing forward along the route.
+            let mLng = loc.lng;
+            let mLat = loc.lat;
+            let mHeading = drvHeading;
+            const routeCoords = this.currentActiveRouteCoordinates;
+            if (routeCoords && routeCoords.length >= 2) {
+              const nr = this.findNearestPointOnRoute(loc.lng, loc.lat, routeCoords);
+              if (nr.distMeters <= 40) {
+                mLng = nr.point[0];
+                mLat = nr.point[1];
+                const si = Math.min(nr.segIndex, routeCoords.length - 2);
+                const b = Math.round(this.calculateBearing(routeCoords[si][1], routeCoords[si][0], routeCoords[si + 1][1], routeCoords[si + 1][0]));
+                if (!isNaN(b)) {
+                  mHeading = b;
+                  this.passengerRouteBearing = b;
+                }
+              } else {
+                [mLng, mLat] = this.snapToNearestRoad(loc.lng, loc.lat, false);
+              }
+            } else if (this.passengerRideIsRouted()) {
+              [mLng, mLat] = this.snapToNearestRoad(loc.lng, loc.lat, false);
+            }
+            this.animateDriverMarkerTo(mLng, mLat, mHeading, 350);
 
             // If passenger has an active routeline, progressively trim it
             if (this.currentActiveRouteCoordinates && this.currentActiveRouteCoordinates.length >= 2) {
@@ -1902,7 +1925,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
             // Smoothly follow camera if centered
             if (this.map && !this.isUserPanned()) {
               const is3D = this.mapControlState() === 3;
-              this.smoothCameraFollow(loc.lng, loc.lat, is3D ? (this.passengerRouteBearing || drvHeading) : 0, is3D ? 60 : 0, 600);
+              this.smoothCameraFollow(mLng, mLat, is3D ? (this.passengerRouteBearing || mHeading) : 0, is3D ? 60 : 0, 600);
             }
           }
         });
@@ -2483,8 +2506,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
         // 2. When in active trip (en_route or in_transit): snap to road so vehicle stays on roadway
         const dTrip = this.driverService.activeTrip();
         if (dTrip && (dTrip.status === 'en_route' || dTrip.status === 'in_transit')) {
-          // Snap to road ONLY when there's an active routeline
-          const [roadLng, roadLat] = this.snapToNearestRoad(rawLng, rawLat);
           const isEnRoute = dTrip.status === 'en_route';
           const anyTrip = dTrip as any;
           const targetLng = isEnRoute
@@ -2495,6 +2516,22 @@ export class HomePage implements AfterViewInit, OnDestroy {
             : Number(anyTrip.dropoffLat || anyTrip.dropoff_lat || anyTrip.destinationLat || anyTrip.destination_lat);
           const hasTargetCoord = !!targetLng && !!targetLat && !isNaN(targetLng) && !isNaN(targetLat);
           const isWalkInOrWayside = (!isEnRoute && !hasTargetCoord) || dTrip.tripType === 'terminal_walk_in' || dTrip.tripType === 'wayside_pickup';
+
+          // Routed trip: behave exactly like returning to the terminal. The vehicle always locks
+          // onto the NEAREST ROAD (even when the tap is in an open field) and the route starts there.
+          if (!isWalkInOrWayside && hasTargetCoord) {
+            this.clearReturnRoutePolyline(); // drop the stale line before the new one arrives
+            const locked = await this.applyRoadRouteAndSnap(rawLng, rawLat, {
+              lng: targetLng,
+              lat: targetLat,
+              color: isEnRoute ? '#2563eb' : '#059669',
+              rideId: Number(String(dTrip.id).replace(/\D/g, '')),
+            });
+            if (locked) return;
+          }
+
+          // Fallback (routing server unreachable): still lock to the nearest road we know about
+          const [roadLng, roadLat] = this.snapToNearestRoad(rawLng, rawLat, true, 250);
 
           // Heading follows the route path at the tapped spot (turning points), never the
           // direction of the tap itself.
@@ -3429,11 +3466,29 @@ export class HomePage implements AfterViewInit, OnDestroy {
     });
   }
 
+  /**
+   * A passenger on a ride that has somewhere to route to (the pickup while the driver is coming,
+   * the drop-off while in transit). The view then mirrors the driver's: marker locked on the road
+   * facing forward along the routeline, camera locked to the route, no compass mode - even in
+   * the moment before the route line has finished loading.
+   */
+  private passengerRideIsRouted(): boolean {
+    if (!this.authService.isPassenger()) return false;
+    const r: any = this.activePassengerRide();
+    const st = String(r?.status || '').toLowerCase().trim();
+    if (!r || !['accepted', 'en_route', 'arrived', 'in_transit'].includes(st)) return false;
+    if (st === 'in_transit') {
+      return !!(Number(r.destination_lat || r.dest_lat) && Number(r.destination_lng || r.dest_lng));
+    }
+    return !!(Number(r.pickup_lat) && Number(r.pickup_lng));
+  }
+
   // True only when the device compass is the active camera controller: 3D free-roam with
   // no returning state, no routeline, and no active trip (mirrors handleDeviceOrientation's guards).
   private get isCompassControllingCamera(): boolean {
     if (this.mapControlState() !== 3) return false;
     if (this.driverService.isReturning()) return false;
+    if (this.passengerRideIsRouted()) return false; // passenger on a routed ride: locked to the road
     if (this.currentActiveRouteCoordinates && this.currentActiveRouteCoordinates.length >= 2) return false;
 
     // Trips without a routeline (walk-in / typed drop-off, no pin) are free roam for everyone:
@@ -3913,12 +3968,27 @@ export class HomePage implements AfterViewInit, OnDestroy {
     } catch { }
   }
 
-  private async applyRoadRouteAndSnap(inputLng: number, inputLat: number): Promise<boolean> {
-    const coordinates = await this.fetchRoadRouteToTerminal(inputLng, inputLat);
-    if (!coordinates || coordinates.length < 2) return false;
+  /**
+   * Locks the vehicle onto the nearest ROAD for a tapped/overridden position and draws the route
+   * from that road point: to the terminal (returning) or to a trip target (pickup / drop-off).
+   * The road point is the routing server's snapped start, so a tap in an open field still
+   * lands on the closest road instead of staying where the finger was.
+   */
+  private async applyRoadRouteAndSnap(
+    inputLng: number,
+    inputLat: number,
+    trip?: { lng: number; lat: number; color: string; rideId?: number }
+  ): Promise<boolean> {
+    const coordinates = trip
+      ? await this.fetchRoadRouteBetweenPoints(inputLng, inputLat, trip.lng, trip.lat)
+      : await this.fetchRoadRouteToTerminal(inputLng, inputLat);
+    if (!coordinates || coordinates.length < 2) {
+      if (this.routeFetchFailed) this.scheduleRouteRetry();
+      return false;
+    }
 
-    this.currentRouteDestination = [this.TERMINAL_LNG, this.TERMINAL_LAT];
-    this.currentRouteColor = '#2563eb';
+    this.currentRouteDestination = trip ? [trip.lng, trip.lat] : [this.TERMINAL_LNG, this.TERMINAL_LAT];
+    this.currentRouteColor = trip ? trip.color : '#2563eb';
 
     // 1. The exact road centerline starting coordinate
     const [roadLng, roadLat] = coordinates[0];
@@ -3944,16 +4014,28 @@ export class HomePage implements AfterViewInit, OnDestroy {
     } catch { }
 
     this.animateDriverMarkerTo(roadLng, roadLat, roadHeading, 450);
-    this.applyRouteLineCoordinates(coordinates);
+    this.applyRouteLineCoordinates(coordinates, this.currentRouteColor);
+
+    if (trip) {
+      // Share the road-locked position with the passenger right away
+      this.driverService.updateDriverLocation({
+        lat: roadLat,
+        lng: roadLng,
+        heading: roadHeading,
+        ride_id: trip.rideId,
+      });
+    }
 
     if (this.map && !this.isUserPanned()) {
       this.smoothCameraFollow(roadLng, roadLat, roadHeading, 60, 600);
     }
 
-    const distToTerminal = this.calculateDistanceMeters(roadLat, roadLng, this.TERMINAL_LAT, this.TERMINAL_LNG);
-    this.isInsideTerminal.set(distToTerminal <= this.TERMINAL_RADIUS_METERS);
-    if (this.driverService.isReturning() && distToTerminal <= this.TERMINAL_RADIUS_METERS) {
-      this.handleTerminalArrival();
+    if (!trip) {
+      const distToTerminal = this.calculateDistanceMeters(roadLat, roadLng, this.TERMINAL_LAT, this.TERMINAL_LNG);
+      this.isInsideTerminal.set(distToTerminal <= this.TERMINAL_RADIUS_METERS);
+      if (this.driverService.isReturning() && distToTerminal <= this.TERMINAL_RADIUS_METERS) {
+        this.handleTerminalArrival();
+      }
     }
 
     return true;
@@ -4452,6 +4534,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       const pRide = this.activePassengerRide();
       const pStatus = String(pRide?.status || '').toLowerCase().trim();
       passengerOnTrip = !!pRide && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(pStatus);
+      if (passengerOnTrip && this.passengerRideIsRouted()) return; // no compass on a routed ride
     }
 
     let rawHeading: number | null = null;
