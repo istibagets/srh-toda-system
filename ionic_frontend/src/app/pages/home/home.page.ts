@@ -10,6 +10,7 @@ import {
   effect,
   untracked,
 } from '@angular/core';
+import { getTabBarHeight } from '../../utils/layout';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, ActivatedRoute } from '@angular/router';
@@ -1253,6 +1254,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   private boundDeviceOrientation = (e: DeviceOrientationEvent) => this.handleDeviceOrientation(e);
   private compassLastBearing = 0;
   private coneCumulativeHeading = 0;
+  private lastCompassCameraTime = 0;
   private compassListenerType: string | null = null;
   private compassRafId: number | null = null;
   private lastCompassUpdateTime = 0;
@@ -1998,7 +2000,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   // Strict 1:1 real-time on-sync calculation for floating buttons, Stage 1 tuck/hide, Stage 2 header zoom/fade & map parallax
   onSheetDragSync(currentTranslateY: number): void {
-    const sheetTopFromBottom = window.innerHeight - 56 - currentTranslateY;
+    const sheetTopFromBottom = window.innerHeight - getTabBarHeight() - currentTranslateY;
     const normalPos = Math.round(sheetTopFromBottom + 72);
 
     // Stage 1 Trigger: Starts across center pin (~52% from top / 48% sheet height)
@@ -2028,7 +2030,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     // --- 2. TOP HEADER COMPONENTS (Stage 2 Zoom-In & Fade-Away Animation) ---
     if (sheetTopFromBottom > buttonHideEnd) {
-      const headerRange = Math.max(70, window.innerHeight - 56 - 60 - buttonHideEnd);
+      const headerRange = Math.max(70, window.innerHeight - getTabBarHeight() - 60 - buttonHideEnd);
       const headerProgress = Math.min(1, Math.max(0, (sheetTopFromBottom - buttonHideEnd) / headerRange));
       const headerScale = (1 + headerProgress * 0.16).toFixed(3);
       const headerY = Math.round(-headerProgress * 24);
@@ -2208,7 +2210,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
           let roadHeading = this.driverRouteBearing || this.driverHeading();
           if (this.driverLat() && this.driverLng()) {
             const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), roadLat, roadLng));
-            if (!isNaN(calc) && (Math.abs(roadLat - this.driverLat()) > 0.00003 || Math.abs(roadLng - this.driverLng()) > 0.00003)) {
+            if (!isNaN(calc) && (Math.abs(roadLat - this.driverLat()) > 0.00007 || Math.abs(roadLng - this.driverLng()) > 0.00007)) {
               roadHeading = calc;
             }
           }
@@ -2257,7 +2259,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
         let newHeading = this.driverHeading();
         if (this.driverLat() && this.driverLng()) {
           const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), rawLat, rawLng));
-          if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00003 || Math.abs(rawLng - this.driverLng()) > 0.00003)) {
+          if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00007 || Math.abs(rawLng - this.driverLng()) > 0.00007)) {
             newHeading = calc;
           }
         }
@@ -2777,6 +2779,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
     let delta = normalizedNew - normalizedCur;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
+    // Ignore sub-3° wobble so the puck/cone doesn't twitch
+    if (Math.abs(delta) < 3) return;
     this.coneCumulativeHeading += delta;
 
     const cumDeg = this.coneCumulativeHeading;
@@ -3573,6 +3577,51 @@ export class HomePage implements AfterViewInit, OnDestroy {
     return { point: bestPoint, segIndex: bestSegIndex, distMeters };
   }
 
+  private smoothedGps: { lat: number; lng: number; time: number } | null = null;
+
+  /**
+   * Position filter for raw GPS fixes. Returns the smoothed position to use, or null
+   * when the fix should be ignored (inaccurate, or inside the noise deadband).
+   */
+  private filterGpsFix(
+    lat: number,
+    lng: number,
+    accuracy: number | null,
+    speed: number | null,
+    now: number
+  ): { lat: number; lng: number } | null {
+    const acc = accuracy !== null && accuracy !== undefined && !isNaN(accuracy) ? accuracy : 30;
+    const prev = this.smoothedGps;
+    const accept = (p: { lat: number; lng: number }) => {
+      this.smoothedGps = { lat: p.lat, lng: p.lng, time: now };
+      return p;
+    };
+
+    if (!prev) return accept({ lat, lng });
+
+    const gap = now - prev.time;
+    const dist = this.calculateDistanceMeters(prev.lat, prev.lng, lat, lng);
+
+    // Long silence, or a confident fix far away (e.g. after GPS dropout): jump to it
+    if (gap > 20000 || (dist > 300 && acc < 50)) return accept({ lat, lng });
+
+    // Coarse cell/Wi-Fi fixes: no deadband (they would never pass it), just ease toward them
+    if (acc > 600) {
+      return accept({ lat: prev.lat + (lat - prev.lat) * 0.4, lng: prev.lng + (lng - prev.lng) * 0.4 });
+    }
+
+    // Poor fix while we recently had a better one: ignore it
+    if (acc > 80 && gap < 15000) return null;
+
+    const hasSpeed = speed !== null && speed !== undefined && !isNaN(speed);
+    const moving = hasSpeed ? (speed as number) > 1.0 : dist > acc;
+    const deadband = moving ? Math.max(2, acc * 0.25) : Math.max(5, acc * 0.8);
+    if (dist < deadband) return null;
+
+    const alpha = moving ? (acc <= 15 ? 0.7 : 0.5) : 0.3;
+    return accept({ lat: prev.lat + (lat - prev.lat) * alpha, lng: prev.lng + (lng - prev.lng) * alpha });
+  }
+
   private handleGpsUpdate(pos: GeolocationPosition): void {
     if (!pos || !pos.coords) return;
 
@@ -3581,6 +3630,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // marker never "returns" to the real position on its own.
     if (this.isLocationOverridden()) {
       this.isGpsFetching.set(false);
+      this.smoothedGps = null;
       return;
     }
 
@@ -3593,7 +3643,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // Degraded fixes still move the marker (never freeze during GPS dropouts); they only
     // get a wider jitter window so cell/Wi-Fi noise can't ping-pong the tricycle.
     this.gpsFixIsCoarse = accuracy !== null && accuracy !== undefined && accuracy > 600;
-    const jitterWindow = this.gpsFixIsCoarse ? 1500 : 250;
 
     // Basic validity check
     if (isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0) {
@@ -3602,23 +3651,16 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     const now = Date.now();
 
-    // Deadband: only skip micro-jitter (< 0.25m) received within the jitter window
-    if (this.lastProcessedGpsCoords) {
-      const distFromLast = this.calculateDistanceMeters(
-        this.lastProcessedGpsCoords.lat,
-        this.lastProcessedGpsCoords.lng,
-        rawLat,
-        rawLng
-      );
-      if (distFromLast < 0.25 && (now - this.lastProcessedGpsCoords.time) < jitterWindow) {
-        return;
-      }
+    // Stabilise the fix: drop poor/noisy readings and low-pass the rest so a parked
+    // device doesn't wander and a moving one tracks smoothly.
+    const filtered = this.filterGpsFix(rawLat, rawLng, accuracy, speed, now);
+    if (!filtered) {
+      this.isGpsFetching.set(false);
+      return;
     }
-
-    this.lastProcessedGpsCoords = { lat: rawLat, lng: rawLng, time: now };
+    this.lastProcessedGpsCoords = { lat: filtered.lat, lng: filtered.lng, time: now };
     this.hasGpsFix.set(true);
-
-    this.processLiveLocation(rawLng, rawLat, heading, speed);
+    this.processLiveLocation(filtered.lng, filtered.lat, heading, speed);
   }
 
   private processLiveLocation(
@@ -3643,11 +3685,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
       const lastB = this.lastDriverBroadcastTime || 0;
       if (Date.now() - lastB > 2500) {
         let drvHeading = this.passengerRouteBearing || this.driverHeading();
-        if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 0.4) {
+        if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 1.0) {
           drvHeading = Math.round(reportedHeading);
         } else if (this.driverLat() && this.driverLng()) {
           const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), rawLat, rawLng));
-          if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00003 || Math.abs(rawLng - this.driverLng()) > 0.00003)) {
+          if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00007 || Math.abs(rawLng - this.driverLng()) > 0.00007)) {
             drvHeading = calc;
           }
         }
@@ -3757,7 +3799,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
         let moveHeading = this.driverHeading();
         if (this.driverLat() && this.driverLng()) {
           const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), roadLat, roadLng));
-          if (!isNaN(calc) && (Math.abs(roadLat - this.driverLat()) > 0.00003 || Math.abs(roadLng - this.driverLng()) > 0.00003)) {
+          if (!isNaN(calc) && (Math.abs(roadLat - this.driverLat()) > 0.00007 || Math.abs(roadLng - this.driverLng()) > 0.00007)) {
             moveHeading = calc;
           }
         }
@@ -3794,11 +3836,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     // 5. FREE ROAM (No active routeline)
     let moveHeading = this.driverHeading();
-    if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 0.4) {
+    if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 1.0) {
       moveHeading = Math.round(reportedHeading);
     } else if (this.driverLat() && this.driverLng()) {
       const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), rawLat, rawLng));
-      if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00003 || Math.abs(rawLng - this.driverLng()) > 0.00003)) {
+      if (!isNaN(calc) && (Math.abs(rawLat - this.driverLat()) > 0.00007 || Math.abs(rawLng - this.driverLng()) > 0.00007)) {
         moveHeading = calc;
       }
     }
@@ -3927,37 +3969,46 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (rawHeading === null || isNaN(rawHeading)) return;
 
     const now = performance.now();
-    // Throttle sensor processing to ~30fps to avoid jitter/drift
+    // Sensor events arrive at 30–60Hz; process at ~30fps
     if (now - this.lastCompassUpdateTime < 32) return;
     this.lastCompassUpdateTime = now;
 
-    // Normalize angular difference [-180, 180]
+    // Circular low-pass filter: heavy smoothing removes magnetometer jitter without
+    // lagging noticeably, and works across the 359°→0° wrap.
     const diff = ((rawHeading - this.compassLastBearing + 540) % 360) - 180;
+    // Large swings (first reading, or a real quick turn) snap closer so it never feels laggy
+    const gain = Math.abs(diff) > 60 ? 0.6 : 0.15;
+    const smoothed = (this.compassLastBearing + diff * gain + 360) % 360;
 
-    // Deadband threshold: ignore micro-noise (< 2.0 degrees) to stay stationary when holding device
-    if (Math.abs(diff) < 2.0) {
+    // Hysteresis: only publish a new heading once it has moved a few degrees from the last
+    // published one, so a held device stays perfectly still.
+    const published = this.driverHeading();
+    const pubDiff = Math.abs(((smoothed - published + 540) % 360) - 180);
+    if (pubDiff < 3) {
+      this.compassLastBearing = smoothed;
       return;
     }
-
-    // Smooth lerp on angle
-    this.compassLastBearing = (this.compassLastBearing + diff * 0.25 + 360) % 360;
-    const smoothedHeading = Math.round(this.compassLastBearing);
+    this.compassLastBearing = smoothed;
+    const smoothedHeading = Math.round(smoothed);
 
     this.driverHeading.set(smoothedHeading);
 
-    // Rotate visual vehicle cone beam marker dynamically
+    // Rotate visual vehicle cone beam marker (CSS-transitioned)
     this.updateDriverHeadingCone(smoothedHeading);
 
-    // In 3D Compass View (mapControlState === 3), smoothly rotate camera and lock 60deg tilt (pitch)
+    // In 3D Compass View (mapControlState === 3), rotate camera and lock 60deg tilt (pitch).
+    // Camera updates are limited to ~12fps with short linear easing so rotation stays fluid
+    // instead of restarting an animation every sensor event.
     if (this.map && this.mapControlState() === 3 && !this.isUserPanned()) {
-      if (this.compassRafId === null) {
+      if (now - this.lastCompassCameraTime >= 80 && this.compassRafId === null) {
+        this.lastCompassCameraTime = now;
         this.compassRafId = requestAnimationFrame(() => {
           this.compassRafId = null;
           if (this.map && this.mapControlState() === 3 && !this.isUserPanned()) {
             this.map.easeTo({
-              bearing: smoothedHeading,
+              bearing: this.driverHeading(),
               pitch: 60,
-              duration: 220,
+              duration: 140,
               easing: (t: number) => t,
             });
           }

@@ -13,6 +13,7 @@ import {
   effect,
   untracked,
 } from '@angular/core';
+import { getTabBarHeight } from '../../utils/layout';
 import { CommonModule } from '@angular/common';
 import { IonToast, ToastController } from '@ionic/angular';
 import { DriverService } from '../../services/driver.service';
@@ -125,11 +126,11 @@ export class QueueCardComponent implements AfterViewInit, OnDestroy {
     } else if (!this.driverService.isOnline()) {
       visibleHeight = 236; // Offline card
     }
-    return Math.max(20, window.innerHeight - 56 - visibleHeight);
+    return Math.max(20, window.innerHeight - getTabBarHeight() - visibleHeight);
   }
 
   get MAX_TRANSLATE_Y(): number {
-    return window.innerHeight - 56 - 44; // 44px visible (pushed down sliver)
+    return window.innerHeight - getTabBarHeight() - 44; // 44px visible (pushed down sliver)
   }
 
   readonly queueOrdinalText = computed(() => {

@@ -438,7 +438,7 @@ body > .sortable-fallback,
     transform: rotate(0deg);
     transform-origin: 35px 35px;
     will-change: transform;
-    transition: transform 0.22s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
     z-index: 5;
 
     svg {

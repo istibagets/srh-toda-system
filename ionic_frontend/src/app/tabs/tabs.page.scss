@@ -3,9 +3,10 @@
   --border: none;
   border-top: 1px solid #e2e8f0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
-  height: 56px;
-  min-height: 56px;
-  max-height: 56px;
+  box-sizing: border-box;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  min-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  max-height: calc(56px + env(safe-area-inset-bottom, 0px));
   position: relative;
   z-index: 1000;
   contain: layout size style;
