@@ -3035,7 +3035,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
     const nowMs = performance.now();
     const sinceLastTarget = nowMs - this.lastMarkerTargetAt;
     this.lastMarkerTargetAt = nowMs;
-    duration = Math.min(1000, Math.max(duration, sinceLastTarget * 0.9));
+    // Slightly longer than the fix interval: the next target re-aims mid-glide, so the marker
+    // never reaches a stop between updates and moves at a steady pace.
+    duration = Math.min(1400, Math.max(duration, sinceLastTarget * 1.15));
 
     // A big jump (manual override tap, teleport) is not normal movement: glide there quickly
     // instead of crawling over ~1s.
@@ -3070,8 +3072,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
       }
 
       const progress = Math.min((currentTime - t0) / this.markerTweenDuration, 1);
-      // Gentle ease-out: close to linear (no stop-start), settles softly at the target
-      const ease = 1 - Math.pow(1 - progress, 1.6);
+      // Linear: constant-speed glide between fixes (ease-out made it stop-start every update)
+      const ease = progress;
 
       const currentLng = from[0] + (to[0] - from[0]) * ease;
       const currentLat = from[1] + (to[1] - from[1]) * ease;
@@ -3788,7 +3790,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (acc > 80 && gap < 15000) return null;
 
     const hasSpeed = speed !== null && speed !== undefined && !isNaN(speed);
-    const moving = hasSpeed ? (speed as number) > 1.0 : dist > acc;
+    // Speed implied by the displacement between fixes: some devices report speed 0/null while
+    // clearly moving, and a slow tricycle covers less than the accuracy circle per fix.
+    const impliedSpeed = gap > 0 ? dist / (gap / 1000) : 0;
+    const moving = (hasSpeed && (speed as number) > 0.8) || (impliedSpeed > 1.8 && dist > 2.5);
 
     // Parked: ignore wander inside the accuracy circle so the marker stays rock steady
     if (!moving && dist < Math.max(4, acc * 0.7)) return null;
@@ -3796,9 +3801,15 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // 1-D Kalman filter on position. Uncertainty grows with time and expected speed, then
     // each fix pulls the estimate by a gain based on its reported accuracy: precise fixes
     // are trusted (marker tracks the real position), noisy ones barely nudge it (smooth).
+    // While moving, the process noise scales with distance travelled (dt * speed)^2 so the
+    // estimate keeps up instead of trailing behind; on a locked routeline (road-snapped)
+    // the position is trusted even more, free-roam stays calmer to limit drift.
     const dt = Math.min(gap, 5000) / 1000;
-    const expectedSpeed = moving ? Math.max(hasSpeed ? (speed as number) : 0, 2) : 0.5;
-    const variance = prev.variance + dt * expectedSpeed * expectedSpeed;
+    const routeLocked = !this.authService.isPassenger() && (this.currentActiveRouteCoordinates?.length ?? 0) >= 2;
+    const expectedSpeed = moving ? Math.max(hasSpeed ? (speed as number) : 0, impliedSpeed, 2) : 0.5;
+    const variance = moving
+      ? prev.variance + Math.pow(expectedSpeed * dt * (routeLocked ? 2.5 : 1.5), 2)
+      : prev.variance + dt * expectedSpeed * expectedSpeed;
     const gain = variance / (variance + acc * acc);
 
     return accept(
@@ -4071,7 +4082,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (this.authService.isPassenger()) return;
     const now = Date.now();
     // ~2 updates per second: the passenger's tricycle trails the driver by well under a second
-    if (now - this.lastBroadcastTime < 450) return;
+    if (now - this.lastBroadcastTime < 300) return;
     this.lastBroadcastTime = now;
 
     const dTrip = this.driverService.activeTrip();
