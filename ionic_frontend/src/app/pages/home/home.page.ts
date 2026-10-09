@@ -1628,7 +1628,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
     effect(() => {
       const loc = this.driverService.locationBroadcast();
       if (loc) {
-        this.lastDriverBroadcastTime = Date.now();
         untracked(() => {
           const currentUserId = this.authService.currentUser()?.id;
           if (loc.driverId === currentUserId || loc.driver_user_id === currentUserId) {
@@ -1662,12 +1661,19 @@ export class HomePage implements AfterViewInit, OnDestroy {
               return;
             }
 
+            // The driver's reported position is authoritative from now on (incl. a manual
+            // override): the passenger's own GPS must never move the tricycle again.
+            this.lastDriverBroadcastTime = Date.now();
+
+            // Face along the route path at the driver's position; fall back to the reported heading
+            const routeHeading = this.routeHeadingAt(loc.lng, loc.lat);
+            if (routeHeading !== null) this.passengerRouteBearing = routeHeading;
+            const drvHeading = routeHeading ?? (loc.heading || this.passengerRouteBearing || 0);
+
             // Update the active ride driver coordinates
             this.activePassengerRide.update((r) =>
-              r ? { ...r, driver_lat: loc.lat, driver_lng: loc.lng, driver_heading: loc.heading } : null
+              r ? { ...r, driver_lat: loc.lat, driver_lng: loc.lng, driver_heading: drvHeading } : null
             );
-
-            const drvHeading = loc.heading || this.passengerRouteBearing || 0;
 
             // Smoothly glide driver tricycle marker
             if (!this.driverMarker) {
@@ -1863,12 +1869,18 @@ export class HomePage implements AfterViewInit, OnDestroy {
             const ar = data.passenger.active_ride;
             const prevStatus = prev?.status;
             const newStatus = ar.status;
+            if (prev && ar && String(prev.id) !== String(ar.id)) this.lastDriverBroadcastTime = 0;
             this.activePassengerRide.set(ar);
 
             if (ar.driver_lat && ar.driver_lng) {
               const dLat = Number(ar.driver_lat);
               const dLng = Number(ar.driver_lng);
-              const dHeading = Number(ar.driver_heading || 0);
+              // The server holds the driver's last reported position (incl. manual overrides);
+              // face along the route there, and stop own-GPS from ever overriding it.
+              const routeH = this.routeHeadingAt(dLng, dLat);
+              if (routeH !== null) this.passengerRouteBearing = routeH;
+              const dHeading = routeH ?? Number(ar.driver_heading || 0);
+              if (!this.lastDriverBroadcastTime) this.lastDriverBroadcastTime = Date.now();
               if (this.driverMarker) {
                 this.animateDriverMarkerTo(dLng, dLat, dHeading, 450);
               } else {
@@ -2280,13 +2292,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
           const hasTargetCoord = !!targetLng && !!targetLat && !isNaN(targetLng) && !isNaN(targetLat);
           const isWalkInOrWayside = (!isEnRoute && !hasTargetCoord) || dTrip.tripType === 'terminal_walk_in' || dTrip.tripType === 'wayside_pickup';
 
-          let roadHeading = this.driverRouteBearing || this.driverHeading();
-          if (this.driverLat() && this.driverLng()) {
-            const calc = Math.round(this.calculateBearing(this.driverLat(), this.driverLng(), roadLat, roadLng));
-            if (!isNaN(calc) && (Math.abs(roadLat - this.driverLat()) > 0.00007 || Math.abs(roadLng - this.driverLng()) > 0.00007)) {
-              roadHeading = calc;
-            }
-          }
+          // Heading follows the route path at the tapped spot (turning points), never the
+          // direction of the tap itself.
+          const roadHeading = this.routeHeadingAt(roadLng, roadLat) ?? this.driverRouteBearing ?? this.driverHeading();
+          if (this.routeHeadingAt(roadLng, roadLat) !== null) this.driverRouteBearing = roadHeading;
 
           // Instantly update driver position on the road with 0ms delay!
           this.hasGpsFix.set(true);
@@ -2296,11 +2305,12 @@ export class HomePage implements AfterViewInit, OnDestroy {
           this.updateDriverLocationWebGL(roadLng, roadLat, roadHeading);
 
           if (this.map && !this.isUserPanned()) {
+            // Always pan to the new spot; rotate/tilt only in 3D (pitched) mode
+            const is3DTrip = this.mapControlState() === 3;
             this.map.easeTo({
               center: [roadLng, roadLat],
-              pitch: 60,
-              bearing: roadHeading,
-              zoom: 16.5,
+              pitch: is3DTrip ? 60 : 0,
+              bearing: is3DTrip ? roadHeading : 0,
               padding: this.getVisibleMapPadding(),
               duration: 450,
               easing: (t: number) => 1 - Math.pow(1 - t, 3),
@@ -2344,12 +2354,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
         this.updateDriverLocationWebGL(rawLng, rawLat, newHeading);
 
         if (this.map && !this.isUserPanned()) {
-          const is3D = this.mapControlState() === 3;
+          // Free roam: just follow the position (pan). Map rotation is never changed by a tap.
           this.map.easeTo({
             center: [rawLng, rawLat],
-            pitch: is3D ? 60 : 0,
-            bearing: is3D ? newHeading : 0,
-            zoom: 16.5,
             padding: this.getVisibleMapPadding(),
             duration: 450,
             easing: (t: number) => 1 - Math.pow(1 - t, 3),
@@ -2843,6 +2850,19 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Bearing of the route segment nearest to a position, or null when there is no route. */
+  private routeHeadingAt(lng: number, lat: number): number | null {
+    const coords = this.currentActiveRouteCoordinates;
+    if (!coords || coords.length < 2) return null;
+    const nearest = this.findNearestPointOnRoute(lng, lat, coords);
+    if (!nearest || !isFinite(nearest.distMeters) || nearest.distMeters > 60) return null;
+    const i = Math.min(nearest.segIndex, coords.length - 2);
+    const [aLng, aLat] = coords[i];
+    const [bLng, bLat] = coords[i + 1];
+    const bearing = Math.round(this.calculateBearing(aLat, aLng, bLat, bLng));
+    return isNaN(bearing) ? null : bearing;
+  }
+
   /**
    * Heading the tricycle marker should show. For a passenger on an active trip this is the
    * DRIVER's broadcast heading (not the passenger's own device heading), so the icon keeps
@@ -2853,6 +2873,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
       const ride = this.activePassengerRide();
       const status = String(ride?.status || '').toLowerCase().trim();
       if (ride && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(status)) {
+        const dLat = Number(ride.driver_lat);
+        const dLng = Number(ride.driver_lng);
+        const routeH = dLat && dLng ? this.routeHeadingAt(dLng, dLat) : null;
+        if (routeH !== null) return routeH;
         const h = Number(ride.driver_heading ?? ride.driver?.heading);
         if (h && !isNaN(h)) return h;
         if (this.passengerRouteBearing) return this.passengerRouteBearing;
@@ -3795,8 +3819,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
       this.driverLat.set(rawLat);
       this.driverLng.set(rawLng);
 
+      // Own GPS drives the tricycle ONLY if the driver has never reported a position for this
+      // ride. Once the driver (or a driver override) has reported, that position is kept.
       const lastB = this.lastDriverBroadcastTime || 0;
-      if (Date.now() - lastB > 2500) {
+      if (lastB === 0) {
         let drvHeading = this.passengerRouteBearing || this.driverHeading();
         if (reportedHeading !== null && reportedHeading !== undefined && !isNaN(reportedHeading) && (speed || 0) > 1.0) {
           drvHeading = Math.round(reportedHeading);
