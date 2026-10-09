@@ -1776,6 +1776,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     setTimeout(() => {
       this.initMapTilerMap();
       this.initCompassTracking();
+      this.armCompassPermissionOnFirstTouch();
 
       // If active trip or returning state was persisted on reload, restore 3D view and docked sheet
       if (this.driverService.activeTrip()) {
@@ -2312,7 +2313,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
               pitch: is3DTrip ? 60 : 0,
               bearing: is3DTrip ? roadHeading : 0,
               padding: this.getVisibleMapPadding(),
-              duration: 450,
+              duration: 260,
               easing: (t: number) => 1 - Math.pow(1 - t, 3),
               essential: true,
             });
@@ -2358,7 +2359,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
           this.map.easeTo({
             center: [rawLng, rawLat],
             padding: this.getVisibleMapPadding(),
-            duration: 450,
+            duration: 260,
             easing: (t: number) => 1 - Math.pow(1 - t, 3),
             essential: true,
           });
@@ -2926,7 +2927,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   }
 
   private updateDriverLocationWebGL(lng: number, lat: number, heading: number): void {
-    this.animateDriverMarkerTo(lng, lat, heading, 400);
+    this.animateDriverMarkerTo(lng, lat, heading, 240);
   }
 
   private animateDriverMarkerTo(targetLng: number, targetLat: number, targetHeading: number, duration = 450): void {
@@ -2992,6 +2993,13 @@ export class HomePage implements AfterViewInit, OnDestroy {
     const sinceLastTarget = nowMs - this.lastMarkerTargetAt;
     this.lastMarkerTargetAt = nowMs;
     duration = Math.min(1200, Math.max(duration, sinceLastTarget * 1.05));
+
+    // A big jump (manual override tap, teleport) is not normal movement: glide there quickly
+    // instead of crawling over ~1s.
+    const jumpMeters = this.markerCurrentLngLat
+      ? this.calculateDistanceMeters(this.markerCurrentLngLat[1], this.markerCurrentLngLat[0], targetLat, targetLng)
+      : 0;
+    if (jumpMeters > 30) duration = 240;
 
     if (this.markerAnimRafId !== null) {
       this.markerTweenDuration = duration;
@@ -3177,12 +3185,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
       if (pRide && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(String(pRide?.status || '').toLowerCase().trim())) {
         return false;
       }
-    } else {
-      const dTrip = this.driverService.activeTrip();
-      if (dTrip && ['en_route', 'in_transit', 'arrived', 'accepted'].includes(String(dTrip.status || '').toLowerCase().trim())) {
-        return false;
-      }
     }
+    // Drivers: the compass stays active on trips without a routeline (terminal walk-in / wayside);
+    // it is only disabled while a routeline exists (checked above) or when returning to terminal.
     return true;
   }
 
@@ -4036,6 +4041,51 @@ export class HomePage implements AfterViewInit, OnDestroy {
     });
   }
 
+  // --- iOS compass permission -------------------------------------------------------
+  // iOS only exposes the compass after DeviceOrientationEvent.requestPermission() is called
+  // from a user gesture, and iOS forgets the grant when the app is closed. So we ask on the
+  // very first touch after launch (instead of waiting for a map button), and every later call
+  // in the same session resolves silently without another prompt.
+  private compassPermissionReady = false;
+
+  private async requestCompassPermission(): Promise<boolean> {
+    if (this.compassPermissionReady) return true;
+    const DOE: any = typeof window !== 'undefined' ? (window as any).DeviceOrientationEvent : null;
+    if (!DOE || typeof DOE.requestPermission !== 'function') {
+      this.compassPermissionReady = true; // Android / desktop: nothing to ask
+      return true;
+    }
+    try {
+      const result = await DOE.requestPermission();
+      this.compassPermissionReady = result === 'granted';
+      if (this.compassPermissionReady) {
+        try { localStorage.setItem('srh_compass_granted', '1'); } catch { }
+        // (Re)attach the listener now that events are allowed
+        this.stopCompassTracking();
+        this.initCompassTracking();
+      }
+    } catch {
+      this.compassPermissionReady = false;
+    }
+    return this.compassPermissionReady;
+  }
+
+  private armCompassPermissionOnFirstTouch(): void {
+    const DOE: any = typeof window !== 'undefined' ? (window as any).DeviceOrientationEvent : null;
+    if (!DOE || typeof DOE.requestPermission !== 'function') return;
+
+    const handler = () => {
+      document.removeEventListener('touchend', handler, true);
+      document.removeEventListener('click', handler, true);
+      this.requestCompassPermission();
+    };
+    document.addEventListener('touchend', handler, true);
+    document.addEventListener('click', handler, true);
+    this.compassTouchHandler = handler;
+  }
+
+  private compassTouchHandler: (() => void) | null = null;
+
   // --- 5. COMPASS TRACKING & 3D ORIENTATION CAMERA ---
   private initCompassTracking(): void {
     if (typeof window === 'undefined') return;
@@ -4076,14 +4126,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // When DRIVER has an ACTIVE TRIP with a routeline: tricycle bearing must stay locked to
-    // the road/route direction. Device compass must NOT override it.
-    if (!this.authService.isPassenger()) {
-      const dTrip = this.driverService.activeTrip();
-      if (dTrip && ['en_route', 'in_transit', 'arrived', 'accepted'].includes(String(dTrip.status || '').toLowerCase().trim())) {
-        return;
-      }
-    }
+    // Drivers on a trip WITHOUT a routeline (terminal walk-in / wayside) keep the compass;
+    // a routeline (checked above) or returning to terminal locks bearing to the road instead.
 
     // When PASSENGER has an ACTIVE TRIP with a routeline: the tricycle bearing must stay
     // locked to the road direction. Device compass must NOT override it.
@@ -4145,6 +4189,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
           this.compassRafId = null;
           if (this.map && this.mapControlState() === 3 && !this.isUserPanned()) {
             this.map.easeTo({
+              center: [this.driverLng(), this.driverLat()],
               bearing: this.driverHeading(),
               pitch: 60,
               duration: 140,
@@ -4183,6 +4228,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   // --- 6. UNIFIED MAP BUTTON CONTROLLER ---
   handleUnifiedMapButtonClick(): void {
+    // User tapped a map button: make sure the compass is allowed (silent if already granted)
+    this.requestCompassPermission();
     if (!this.map) return;
 
     const isPassenger = this.authService.isPassenger();
@@ -4216,9 +4263,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       // When on an active trip with a routeline, lock to route bearing (not device compass)
       // Only request compass permission in true free-roam 3D mode
       if (!hasActiveTrip) {
-        if (typeof (DeviceOrientationEvent as any)?.requestPermission === 'function') {
-          (DeviceOrientationEvent as any).requestPermission().catch(() => { });
-        }
+        this.requestCompassPermission();
       }
 
       // Use route bearing when on active trip, device heading otherwise
