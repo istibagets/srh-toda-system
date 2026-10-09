@@ -9,16 +9,33 @@ export function getTabBarHeight(): number {
   return h >= 40 ? Math.round(h) : 56;
 }
 
+function blockHeight(el: Element): number {
+  const cs = getComputedStyle(el);
+  if (cs.display === 'none') return 0;
+  if (cs.position === 'absolute' || cs.position === 'fixed') return 0;
+  // Custom elements (<app-drop-off-card>) are inline by default: measure their children instead
+  if (cs.display === 'inline' || cs.display === 'contents') {
+    return Array.from(el.children).reduce((h, c) => h + blockHeight(c), 0);
+  }
+  return (
+    (el as HTMLElement).getBoundingClientRect().height +
+    (parseFloat(cs.marginTop) || 0) +
+    (parseFloat(cs.marginBottom) || 0)
+  );
+}
+
 /**
- * Natural (content-sized) height of a bottom sheet. The sheet normally has a fixed tall
- * height; briefly letting it size to its content tells us exactly how much of it must be
- * visible so nothing is clipped on any device, font size or safe-area combination.
+ * Height a bottom sheet needs to show its drag handle plus ALL of its current content.
+ * Measures the content blocks themselves (not the stretched sheet container), so it follows
+ * whatever state is rendered on any device, font size or safe-area combination.
  */
-export function measureNaturalHeight(el: HTMLElement | null | undefined): number {
-  if (!el) return 0;
-  const prev = el.style.height;
-  el.style.height = 'auto';
-  const h = el.offsetHeight;
-  el.style.height = prev;
-  return Math.ceil(h);
+export function measureNaturalHeight(sheet: HTMLElement | null | undefined): number {
+  if (!sheet) return 0;
+  const handle = sheet.querySelector('.sheet-drag-handle') as HTMLElement | null;
+  const content = sheet.querySelector('.sheet-details-content') as HTMLElement | null;
+  if (!content) return 0;
+  const cs = getComputedStyle(content);
+  const padding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const inner = Array.from(content.children).reduce((h, c) => h + blockHeight(c), 0);
+  return Math.ceil((handle?.getBoundingClientRect().height || 0) + padding + inner);
 }

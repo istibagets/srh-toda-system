@@ -2449,7 +2449,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
       mapInstance.on('zoomstart', markUserInteracting);
       mapInstance.on('rotatestart', markUserInteracting);
       mapInstance.on('pitchstart', markUserInteracting);
-      mapInstance.on('rotate', () => this.updateDriverHeadingCone(this.driverHeading()));
+      mapInstance.on('rotate', () => this.updateDriverHeadingCone(this.currentTricycleHeading()));
 
       mapInstance.on('error', (e: any) => {
         if (e && e.error && e.error.message && !mapInstance.isStyleLoaded()) {
@@ -2841,6 +2841,24 @@ export class HomePage implements AfterViewInit, OnDestroy {
         this.mapControlState.set(2);
       }
     }
+  }
+
+  /**
+   * Heading the tricycle marker should show. For a passenger on an active trip this is the
+   * DRIVER's broadcast heading (not the passenger's own device heading), so the icon keeps
+   * facing the way the tricycle travels while the map rotates.
+   */
+  private currentTricycleHeading(): number {
+    if (this.authService.isPassenger()) {
+      const ride = this.activePassengerRide();
+      const status = String(ride?.status || '').toLowerCase().trim();
+      if (ride && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(status)) {
+        const h = Number(ride.driver_heading ?? ride.driver?.heading);
+        if (h && !isNaN(h)) return h;
+        if (this.passengerRouteBearing) return this.passengerRouteBearing;
+      }
+    }
+    return this.driverHeading();
   }
 
   private updateDriverHeadingCone(heading: number): void {
