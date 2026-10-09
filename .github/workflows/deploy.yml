@@ -66,9 +66,9 @@ jobs:
       - name: Transfer & Deploy to Oracle Cloud
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
-          SSH_HOST: ${{ secrets.SSH_HOST || '161.118.237.125' }}
+          SSH_HOST: ${{ secrets.SSH_HOST || '168.107.79.216' }}
           SSH_USER: ${{ secrets.SSH_USER || 'ubuntu' }}
-          TARGET_DIR: ${{ secrets.REMOTE_ROOT || '/var/www/srh-link-toda-ionic' }}
+          TARGET_DIR: ${{ secrets.REMOTE_ROOT || '/home/ubuntu/srh-toda-system' }}
         run: |
           if [ -z "$SSH_KEY" ]; then
             echo "::error::Secret SSH_KEY is not defined in GitHub repository secrets!"
@@ -76,10 +76,10 @@ jobs:
           fi
 
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          printf "%s\n" "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i ~/.ssh/id_rsa"
 
           echo "Uploading deploy bundle to $SSH_USER@$SSH_HOST:$TARGET_DIR..."
           scp $SSH_OPTS deploy_ionic.tar.gz "$SSH_USER@$SSH_HOST:$TARGET_DIR/deploy_ionic.tar.gz"
@@ -92,16 +92,19 @@ jobs:
             tar -xzf deploy_ionic.tar.gz
             rm -f deploy_ionic.tar.gz
 
-            echo "Running Laravel Artisan maintenance & migrations..."
-            php artisan up 2>/dev/null || true
-            php artisan migrate --force
-            php artisan config:clear 2>/dev/null || true
-            php artisan route:clear 2>/dev/null || true
-            php artisan view:clear 2>/dev/null || true
+            echo "Syncing frontend assets to volume..."
+            cp -r ionic_www/* ionic_frontend/www/ 2>/dev/null || true
 
-            echo "Ensuring file permissions..."
-            sudo chown -R "$SSH_USER:www-data" "$TARGET_DIR" 2>/dev/null || true
-            sudo chmod -R 775 "$TARGET_DIR/storage" "$TARGET_DIR/bootstrap/cache" 2>/dev/null || true
+            echo "Updating Nginx configuration & Adminer assets..."
+            docker cp nginx.conf srh_toda_app:/etc/nginx/http.d/default.conf 2>/dev/null || true
+            docker cp laravel_backend/public/adminer.css srh_toda_app:/var/www/html/public/adminer.css 2>/dev/null || true
+            docker exec srh_toda_app nginx -s reload 2>/dev/null || true
 
-            echo "=== DIRECT DEPLOYMENT COMPLETED SUCCESSFULLY ==="
+            echo "Running Laravel maintenance & migrations..."
+            docker exec srh_toda_app php artisan migrate --force
+            docker exec srh_toda_app php artisan config:clear 2>/dev/null || true
+            docker exec srh_toda_app php artisan route:clear 2>/dev/null || true
+            docker exec srh_toda_app php artisan view:clear 2>/dev/null || true
+
+            echo "=== DEPLOYMENT COMPLETED SUCCESSFULLY ==="
           EOF

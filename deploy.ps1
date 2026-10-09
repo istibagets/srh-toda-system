@@ -2,13 +2,19 @@
 param(
     [switch]$SkipBuild,
     [switch]$FullReset,
-    [string]$RemoteHost = "161.118.237.125",
+    [string]$RemoteHost = "168.107.79.216",
     [string]$RemoteUser = "ubuntu",
-    [string]$RemoteRoot = "/var/www/srh-link-toda-ionic"
+    [string]$RemoteRoot = "/home/ubuntu/srh-toda-system"
 )
 
 # Resolve SSH Key location
-$SSH_KEY = "C:\Users\rfer3\Documents\SSH KEY\ssh-key-2026-08-08.key"
+$SSH_KEY = "C:\Users\rfer3\Downloads\ssh-key-2026-10-08.key"
+if (-not (Test-Path $SSH_KEY)) {
+    $SSH_KEY = "C:\Users\rfer3\Documents\SSH KEY\ssh-key-2026-10-08.key"
+}
+if (-not (Test-Path $SSH_KEY)) {
+    $SSH_KEY = "C:\Users\rfer3\Documents\SSH KEY\ssh-key-2026-08-08.key"
+}
 if (-not (Test-Path $SSH_KEY)) {
     $SSH_KEY = "C:\Users\lenovo\.ssh\ssh-key-2026-08-08.key"
 }
@@ -119,11 +125,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 4. Remote Unpack & Apply Updates
 Write-Host "[4/4] Extracting bundle and updating remote services..." -ForegroundColor Yellow
-if ($FullReset) {
-    $remoteScript = "cd $RemoteRoot && tar -xzf deploy_ionic.tar.gz && rm -f deploy_ionic.tar.gz && php artisan migrate:fresh --seed --force && php artisan config:clear 2>/dev/null && php artisan route:clear 2>/dev/null && php artisan view:clear 2>/dev/null && sudo chown -R ${RemoteUser}:www-data $RemoteRoot && sudo chmod -R 775 $RemoteRoot/storage $RemoteRoot/bootstrap/cache"
-} else {
-    $remoteScript = "cd $RemoteRoot && tar -xzf deploy_ionic.tar.gz && rm -f deploy_ionic.tar.gz && php artisan up 2>/dev/null && php artisan migrate --force && php artisan config:clear 2>/dev/null && php artisan route:clear 2>/dev/null && php artisan view:clear 2>/dev/null && sudo chown -R ${RemoteUser}:www-data $RemoteRoot && sudo chmod -R 775 $RemoteRoot/storage $RemoteRoot/bootstrap/cache"
-}
+$remoteScript = "cd $RemoteRoot && tar -xzf deploy_ionic.tar.gz && rm -f deploy_ionic.tar.gz && cp -r ionic_www/* ionic_frontend/www/ 2>/dev/null && (docker cp nginx.conf srh_toda_app:/etc/nginx/http.d/default.conf 2>/dev/null || true) && (docker exec srh_toda_app nginx -s reload 2>/dev/null || true) && (docker exec srh_toda_app php artisan migrate --force 2>/dev/null || php artisan migrate --force 2>/dev/null || true) && (docker exec srh_toda_app php artisan config:clear 2>/dev/null || php artisan config:clear 2>/dev/null || true) && (docker exec srh_toda_app php artisan route:clear 2>/dev/null || php artisan route:clear 2>/dev/null || true)"
 
 $sshCmd = "ssh -i `"$SSH_KEY`" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL `"${RemoteUser}@${RemoteHost}`" `"$remoteScript`""
 Invoke-Expression $sshCmd
@@ -132,6 +134,6 @@ Invoke-Expression $sshCmd
 if (Test-Path $tarOutput) { Remove-Item -Force $tarOutput }
 
 Write-Host "================================================" -ForegroundColor Cyan
-Write-Host "DEPLOYMENT COMPLETE! Directly deployed to Oracle VM" -ForegroundColor Green
-Write-Host "URL: https://srh-link-toda-ionic.duckdns.org" -ForegroundColor Cyan
+Write-Host "DEPLOYMENT COMPLETE! Live on Oracle Cloud" -ForegroundColor Green
+Write-Host "URL: https://srh-link-toda.duckdns.org" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
