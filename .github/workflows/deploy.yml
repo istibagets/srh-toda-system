@@ -10,29 +10,90 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Oracle Cloud VM via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: 22
-          script: |
-            echo "Navigating to project directory..."
-            cd ~/srh-toda-system
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ionic_frontend/package-lock.json
 
-            echo "Pulling latest code from GitHub..."
-            git pull origin main
+      - name: Build Ionic Frontend (Production)
+        run: |
+          cd ionic_frontend
+          npm ci --prefer-offline || npm install --legacy-peer-deps
+          npm run build
+          cd ..
 
-            echo "Building and restarting containers..."
-            docker compose up -d --build --force-recreate
+      - name: Package Deployment Bundle
+        run: |
+          mkdir -p deploy_bundle
+          
+          # 1. Copy Laravel Backend Core Files
+          for dir in app bootstrap config database routes public; do
+            if [ -d "laravel_backend/$dir" ]; then
+              cp -r "laravel_backend/$dir" deploy_bundle/
+            fi
+          done
 
-            echo "Waiting for services..."
-            sleep 5
+          # 2. Copy Root Backend Files
+          for file in artisan composer.json composer.lock; do
+            if [ -f "laravel_backend/$file" ]; then
+              cp "laravel_backend/$file" deploy_bundle/
+            fi
+          done
 
-            echo "Running database migrations..."
-            docker compose exec -T app php artisan migrate --force
-            docker compose exec -T app php artisan config:cache
-            docker compose exec -T app php artisan route:cache
+          # 3. Clean Bootstrap Cache
+          rm -rf deploy_bundle/bootstrap/cache/*
 
-            echo "=== DEPLOYMENT COMPLETED SUCCESSFULLY ==="
+          # 4. Copy Compiled Ionic Frontend (www -> ionic_www)
+          cp -r ionic_frontend/www deploy_bundle/ionic_www
+
+          # 5. Create Tarball Bundle
+          tar -czf deploy_ionic.tar.gz -C deploy_bundle .
+          rm -rf deploy_bundle
+
+      - name: Transfer & Deploy to Oracle Cloud
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST || '161.118.237.125' }}
+          SSH_USER: ${{ secrets.SSH_USER || 'ubuntu' }}
+          TARGET_DIR: ${{ secrets.REMOTE_ROOT || '/var/www/srh-link-toda-ionic' }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Secret SSH_KEY is not defined in GitHub repository secrets!"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa"
+
+          echo "Uploading deploy bundle to $SSH_USER@$SSH_HOST:$TARGET_DIR..."
+          scp $SSH_OPTS deploy_ionic.tar.gz "$SSH_USER@$SSH_HOST:$TARGET_DIR/deploy_ionic.tar.gz"
+
+          echo "Applying deployment updates on Oracle Cloud VM..."
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" << EOF
+            set -e
+            cd "$TARGET_DIR"
+            echo "Extracting bundle..."
+            tar -xzf deploy_ionic.tar.gz
+            rm -f deploy_ionic.tar.gz
+
+            echo "Running Laravel Artisan maintenance & migrations..."
+            php artisan up 2>/dev/null || true
+            php artisan migrate --force
+            php artisan config:clear 2>/dev/null || true
+            php artisan route:clear 2>/dev/null || true
+            php artisan view:clear 2>/dev/null || true
+
+            echo "Ensuring file permissions..."
+            sudo chown -R "$SSH_USER:www-data" "$TARGET_DIR" 2>/dev/null || true
+            sudo chmod -R 775 "$TARGET_DIR/storage" "$TARGET_DIR/bootstrap/cache" 2>/dev/null || true
+
+            echo "=== DIRECT DEPLOYMENT COMPLETED SUCCESSFULLY ==="
+          EOF

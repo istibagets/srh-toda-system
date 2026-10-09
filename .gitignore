@@ -26,3 +26,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+scratch/
+*.tar.gz
+deploy_bundle/

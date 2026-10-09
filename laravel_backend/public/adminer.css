@@ -1,0 +1,250 @@
+/* Adminer Standard Clean Theme */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-hover: #eff6ff;
+  --border-color: #cbd5e1;
+  --border-dark: #94a3b8;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --accent-blue: #2563eb;
+  --accent-hover: #1d4ed8;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --header-bg: #1e293b;
+  --header-text: #f8fafc;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Header & Menu */
+#menu {
+  background: var(--header-bg);
+  color: var(--header-text);
+  padding: 14px 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#menu h1 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+#menu h1 a {
+  color: #38bdf8;
+  text-decoration: none;
+}
+
+#menu p {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+#menu a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+#menu a:hover {
+  text-decoration: underline;
+  color: #ffffff;
+}
+
+#tables {
+  margin-top: 15px;
+}
+
+#tables a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #e2e8f0;
+}
+
+#tables a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+/* Content Area */
+#content {
+  margin-left: 280px;
+  padding: 25px 35px;
+}
+
+@media (max-width: 900px) {
+  #content {
+    margin-left: 0;
+    padding: 15px;
+  }
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 20px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+p.links {
+  background: #f1f5f9;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+}
+
+p.links a {
+  color: var(--accent-blue);
+  font-weight: 500;
+  margin-right: 15px;
+  text-decoration: none;
+}
+
+p.links a:hover {
+  text-decoration: underline;
+}
+
+/* Tables Styling */
+table {
+  width: auto;
+  border-collapse: collapse;
+  margin: 15px 0 25px 0;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+thead th, thead td {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+}
+
+thead th a, thead td a {
+  color: #1e293b;
+  text-decoration: none;
+}
+
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+tbody tr:nth-child(even) {
+  background-color: var(--bg-secondary);
+}
+
+tbody tr:hover {
+  background-color: var(--bg-hover) !important;
+}
+
+tbody td, tbody th {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+/* Forms & Inputs */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+select,
+textarea {
+  padding: 7px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+input[type="submit"],
+input[type="button"],
+button {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 5px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+input[type="submit"]:hover,
+input[type="button"]:hover,
+button:hover {
+  background: var(--accent-hover);
+}
+
+fieldset {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+  margin: 15px 0;
+  background: #fafafa;
+}
+
+legend {
+  font-weight: 600;
+  color: #475569;
+  padding: 0 8px;
+}
+
+/* Messages & Alerts */
+.message {
+  padding: 12px 18px;
+  background: #dcfce7;
+  color: #166534;
+  border-left: 4px solid var(--success);
+  border-radius: 4px;
+  margin: 15px 0;
+}
+
+.error {
+  padding: 12px 18px;
+  background: #fee2e2;
+  color: #991b1b;
+  border-left: 4px solid var(--danger);
+  border-radius: 4px;
+  margin: 15px 0;
+}
+
+/* Footer / Version */
+#version {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 30px;
+}
