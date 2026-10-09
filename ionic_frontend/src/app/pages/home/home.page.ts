@@ -1709,7 +1709,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
             if (!this.driverMarker) {
               this.syncPassengerDriverTricycleMarker();
             }
-            this.animateDriverMarkerTo(loc.lng, loc.lat, drvHeading, 500);
+            this.animateDriverMarkerTo(loc.lng, loc.lat, drvHeading, 350);
 
             // If passenger has an active routeline, progressively trim it
             if (this.currentActiveRouteCoordinates && this.currentActiveRouteCoordinates.length >= 2) {
@@ -3035,7 +3035,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     const nowMs = performance.now();
     const sinceLastTarget = nowMs - this.lastMarkerTargetAt;
     this.lastMarkerTargetAt = nowMs;
-    duration = Math.min(1200, Math.max(duration, sinceLastTarget * 1.05));
+    duration = Math.min(1000, Math.max(duration, sinceLastTarget * 0.9));
 
     // A big jump (manual override tap, teleport) is not normal movement: glide there quickly
     // instead of crawling over ~1s.
@@ -4070,7 +4070,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
   private broadcastDriverLocationThrottled(lat: number, lng: number, heading: number, speed: number | null): void {
     if (this.authService.isPassenger()) return;
     const now = Date.now();
-    if (now - this.lastBroadcastTime < 1000) return;
+    // ~2 updates per second: the passenger's tricycle trails the driver by well under a second
+    if (now - this.lastBroadcastTime < 450) return;
     this.lastBroadcastTime = now;
 
     const dTrip = this.driverService.activeTrip();

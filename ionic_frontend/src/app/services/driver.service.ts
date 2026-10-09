@@ -1521,10 +1521,41 @@ export class DriverService {
       }));
     } catch { }
 
+    this.sendLocationToServer(coords);
+  }
+
+  private locationInFlight = false;
+  private locationSentAt = 0;
+  private pendingLocation: { lat: number; lng: number; heading?: number; speed?: number; ride_id?: number } | null = null;
+
+  /**
+   * Sends one location request at a time. On a slow mobile connection requests would otherwise
+   * pile up and arrive late and out of order; instead only the NEWEST position waits its turn,
+   * so the passenger always receives the latest point as soon as the network allows.
+   */
+  private sendLocationToServer(coords: { lat: number; lng: number; heading?: number; speed?: number; ride_id?: number }): void {
+    // A request stuck for 8s (dead connection) must not block newer positions forever
+    if (this.locationInFlight && Date.now() - this.locationSentAt < 8000) {
+      this.pendingLocation = coords;
+      return;
+    }
+    this.locationInFlight = true;
+    this.locationSentAt = Date.now();
     this.dashboardService.updateDriverLocation(coords).subscribe({
       next: () => { },
-      error: (err) => console.warn('Location broadcast notice:', err?.status),
+      error: (err) => {
+        console.warn('Location broadcast notice:', err?.status);
+        this.onLocationRequestDone();
+      },
+      complete: () => this.onLocationRequestDone(),
     });
+  }
+
+  private onLocationRequestDone(): void {
+    this.locationInFlight = false;
+    const next = this.pendingLocation;
+    this.pendingLocation = null;
+    if (next) this.sendLocationToServer(next);
   }
 
   cancelQueueOrderChanges(): void {

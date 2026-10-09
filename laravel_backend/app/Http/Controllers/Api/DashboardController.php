@@ -798,6 +798,12 @@ class DashboardController extends Controller
         $speed = $request->has('speed') ? (float) $request->speed : null;
         $rideId = $request->has('ride_id') ? (int) $request->ride_id : null;
 
+        // Push to every connected screen FIRST (before any cache/DB work) so the passenger sees
+        // the move as soon as possible; persistence for refresh/reconnect happens right after.
+        try {
+            \App\Events\TricycleLocationUpdated::dispatch($user->id, $lat, $lng, $heading, $speed, $rideId);
+        } catch (\Throwable $e) {}
+
         Cache::put("driver_location_{$user->id}", [
             'lat' => $lat,
             'lng' => $lng,
@@ -812,10 +818,6 @@ class DashboardController extends Controller
                 'heading' => $heading,
             ], 3600);
         }
-
-        try {
-            \App\Events\TricycleLocationUpdated::dispatch($user->id, $lat, $lng, $heading, $speed, $rideId);
-        } catch (\Throwable $e) {}
 
         // --- 30-MINUTE GEOFENCE EXIT TIMEOUT LOGIC ---
         $autoOffDuty = false;
