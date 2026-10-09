@@ -1165,10 +1165,20 @@
     background: #ffffff;
     border-bottom: 1px solid #e2e8f0;
 
+    /* Full-screen modal: clear the iPhone notch / status bar like every other page header */
     ion-toolbar {
       --background: transparent;
       --border-width: 0;
-      padding: 0.5rem 0.85rem;
+      --min-height: 0;
+      --padding-top: 0;
+      --padding-bottom: 0;
+      --padding-start: 0;
+      --padding-end: 0;
+      padding:
+        calc(env(safe-area-inset-top, 0px) + 0.75rem)
+        max(1rem, env(safe-area-inset-right, 0px))
+        0.75rem
+        max(1rem, env(safe-area-inset-left, 0px)) !important;
     }
 
     .settings-modal-header-row {
@@ -1176,17 +1186,19 @@
       align-items: center;
       justify-content: space-between;
       width: 100%;
+      min-height: 40px;
 
       .header-title-wrap {
         display: flex;
         flex-direction: column;
 
         .settings-modal-title {
-          font-size: 1.25rem;
-          font-weight: 900;
+          font-size: clamp(1.15rem, 5.6vw, 1.4rem);
+          font-weight: 800;
+          line-height: 1.2;
           color: #0f172a;
           margin: 0;
-          letter-spacing: -0.02em;
+          letter-spacing: -0.03em;
         }
 
         .settings-modal-subtitle {
