@@ -977,6 +977,10 @@ export class DriverService {
             isOnline: !!dData.profile.is_online,
             queuePosition: dData.profile.queue_position ?? null,
             suspensionReason: dData.profile.suspension_reason || null,
+            appealStatus: dData.profile.appeal_status || 'None',
+            appealMessage: dData.profile.appeal_message ?? null,
+            appealAttachments: Array.isArray(dData.profile.appeal_attachments) ? dData.profile.appeal_attachments : [],
+            appealedAt: dData.profile.appealed_at ?? null,
             rating: dData.profile.rating !== undefined && dData.profile.rating !== null ? Number(dData.profile.rating) : d.rating,
             ratingCount: dData.profile.rating_count !== undefined && dData.profile.rating_count !== null ? Number(dData.profile.rating_count) : d.ratingCount,
             todayEarnings: dData.today_earnings ?? 0,
@@ -1548,13 +1552,18 @@ export class DriverService {
     }));
   }
 
-  submitAppeal(message: string, attachments: Array<{ name: string; url?: string; extension?: string }>): void {
-    this.driverSignal.update((d) => ({
-      ...d,
-      appealStatus: 'Pending',
-      appealMessage: message,
-      appealAttachments: attachments,
-      appealedAt: 'Just now',
-    }));
+  /** Sends the appeal to the server; local state only changes once the server accepted it. */
+  submitAppeal(message: string, files: File[]) {
+    return this.dashboardService.submitAppeal(message, files).pipe(
+      tap((res) => {
+        this.driverSignal.update((d) => ({
+          ...d,
+          appealStatus: 'Pending',
+          appealMessage: res?.appeal_message ?? message,
+          appealAttachments: Array.isArray(res?.appeal_attachments) ? res.appeal_attachments : [],
+          appealedAt: 'Just now',
+        }));
+      })
+    );
   }
 }

@@ -119,7 +119,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   // Appeal form state for suspended / rejected screen
   appealText = signal<string>('');
-  appealFiles = signal<Array<{ name: string; size: string; url?: string }>>([]);
+  appealFiles = signal<Array<{ name: string; size: string; url?: string; file?: File }>>([]);
+  isSubmittingAppeal = signal<boolean>(false);
 
   // Terminal Real Coordinates from dynamic driverService / Laravel backend
   get TERMINAL_LNG(): number { return this.driverService.terminalLng(); }
@@ -4105,7 +4106,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
     if (this.isUserPanned()) {
       this.isUserPanned.set(false);
       this.recenterToDriverOrTerminal();
-      this.displayToast(hasActiveTrip ? 'Re-centered on Driver Tricycle' : 'Re-centered on Location');
       return;
     }
 
@@ -4145,7 +4145,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
         easing: (t: number) => 1 - Math.pow(1 - t, 3),
         essential: true,
       });
-      this.displayToast(hasActiveTrip ? '3D Route View (Facing Route Direction)' : '3D Compass View (Follows Device Orientation)');
     } else {
       // Switch from 3D Tilted View back to 2D Top View
       this.isUserPanned.set(false);
@@ -4160,7 +4159,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
         easing: (t: number) => 1 - Math.pow(1 - t, 3),
         essential: true,
       });
-      this.displayToast('2D Top View (North-Up)');
     }
   }
 
@@ -4210,7 +4208,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
         if (hasActiveTrip) {
           this.recenterToDriverOrTerminal();
-          this.displayToast('GPS restored • Centered on Driver');
           return;
         }
 
@@ -4226,7 +4223,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
           essential: true,
         });
 
-        this.displayToast('Re-centered on Live Location');
       },
       (err) => {
         console.warn('GPS location fetch error on recenter:', err);
@@ -4234,7 +4230,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
         this.isUserPanned.set(false);
         this.isLocationOverridden.set(false);
         this.recenterToDriverOrTerminal();
-        this.displayToast('Re-centered on last known position');
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
@@ -4385,7 +4380,14 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
   }
 
+  private lastToast = { msg: '', at: 0 };
+
   displayToast(msg: string, color?: string): void {
+    // Show each notification once: the same message arriving from both the realtime channel
+    // and the dashboard refresh within a few seconds is a duplicate.
+    const now = Date.now();
+    if (msg === this.lastToast.msg && now - this.lastToast.at < 4000) return;
+    this.lastToast = { msg, at: now };
     this.toastMessage.set(msg);
     this.toastColor.set(color);
     this.showToast.set(true);
@@ -4395,7 +4397,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   handleAppealFileUpload(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      const newFiles: Array<{ name: string; size: string; url?: string }> = [];
+      const newFiles: Array<{ name: string; size: string; url?: string; file?: File }> = [];
       for (let i = 0; i < input.files.length; i++) {
         const file = input.files[i];
         let fileUrl = '';
@@ -4408,6 +4410,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
           name: file.name,
           size: (file.size / 1024).toFixed(1) + ' KB',
           url: fileUrl,
+          file,
         });
       }
       this.appealFiles.set([...this.appealFiles(), ...newFiles]);
@@ -4440,13 +4443,21 @@ export class HomePage implements AfterViewInit, OnDestroy {
       this.displayToast('Please write an explanation for your appeal.');
       return;
     }
+    if (this.isSubmittingAppeal()) return;
 
-    this.driverService.submitAppeal(
-      text.trim(),
-      this.appealFiles().map((f) => ({ name: f.name }))
-    );
-    this.appealText.set('');
-    this.appealFiles.set([]);
-    this.displayToast('Your appeal has been submitted to TODA Admin for review.');
+    this.isSubmittingAppeal.set(true);
+    const files = this.appealFiles().map((f) => f.file).filter((f): f is File => !!f);
+    this.driverService.submitAppeal(text.trim(), files).subscribe({
+      next: () => {
+        this.isSubmittingAppeal.set(false);
+        this.appealText.set('');
+        this.appealFiles.set([]);
+        this.displayToast('Your appeal has been submitted to TODA Admin for review.', 'success');
+      },
+      error: (err) => {
+        this.isSubmittingAppeal.set(false);
+        this.displayToast(err?.error?.message || 'Unable to submit your appeal. Please try again.', 'danger');
+      },
+    });
   }
 }

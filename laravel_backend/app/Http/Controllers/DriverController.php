@@ -407,17 +407,31 @@ class DriverController extends Controller
             'appeal_attachments' => count($attachments) > 0 ? $attachments : $driver->appeal_attachments,
         ]);
 
-        // Notify Admin of new appeal with realtime broadcast
+        // Notify admins once: in-app announcement + push. Each step is isolated so a realtime
+        // (Reverb) outage can never stop the notification from being stored.
+        $announcement = null;
         try {
-            broadcast(new \App\Events\DriverApplicantUpdated($driver->id, 'Pending'));
-            broadcast(new \App\Events\QueueUpdated());
             $announcement = \App\Models\Announcement::create([
-                'title' => "🚨 New Driver Appeal: {$driver->full_name}",
-                'message' => "Driver {$driver->full_name} (MTOP #{$driver->mtop_number}) submitted an appeal: \"{$request->appeal_message}\"",
+                'created_by' => $user->id,
+                'title' => "New Driver Appeal: {$driver->full_name}",
+                'message' => "Driver {$driver->full_name} (MTOP #{$driver->mtop_number}) submitted an appeal: \"" . \Illuminate\Support\Str::limit($request->appeal_message, 160) . "\"",
                 'target_audience' => 'ADMIN',
             ]);
-            broadcast(new \App\Events\AnnouncementCreated($announcement));
         } catch (\Throwable $e) {}
+
+        try {
+            app(\App\Services\PushService::class)->sendToRole(
+                'admin',
+                'New Driver Appeal',
+                "{$driver->full_name} submitted a reinstatement appeal.",
+                '/',
+                "appeal-{$driver->id}"
+            );
+        } catch (\Throwable $e) {}
+
+        try { broadcast(new \App\Events\DriverApplicantUpdated($driver->id, 'Pending')); } catch (\Throwable $e) {}
+        try { broadcast(new \App\Events\QueueUpdated()); } catch (\Throwable $e) {}
+        try { if ($announcement) broadcast(new \App\Events\AnnouncementCreated($announcement)); } catch (\Throwable $e) {}
 
         return response()->json([
             'status' => 'success',

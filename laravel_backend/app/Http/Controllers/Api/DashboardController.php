@@ -1445,6 +1445,7 @@ class DashboardController extends Controller
         }
 
         $status = $request->compliance_status;
+        $hadPendingAppeal = $driver->appeal_status === 'Pending';
         $driver->compliance_status = $status;
 
         if ($status === 'Approved') {
@@ -1469,20 +1470,32 @@ class DashboardController extends Controller
 
         $driver->save();
 
-        // Broadcast realtime compliance update & announcements to all connected clients
-        try {
-            broadcast(new \App\Events\DriverApplicantUpdated($driver->id, $status));
-            broadcast(new \App\Events\QueueUpdated());
+        // Realtime refresh for connected admin/driver screens
+        try { broadcast(new \App\Events\DriverApplicantUpdated($driver->id, $status)); } catch (\Throwable $e) {}
+        try { broadcast(new \App\Events\QueueUpdated()); } catch (\Throwable $e) {}
 
-            $announcement = \App\Models\Announcement::create([
-                'title' => $status === 'Approved'
-                    ? "✅ Driver Account Reinstated"
-                    : ($status === 'Suspended' ? "⚠️ Driver Account Suspended" : "Notice: Driver Status Updated"),
-                'message' => "Driver {$driver->full_name} (MTOP #{$driver->mtop_number}) compliance status updated to {$status}.",
-                'target_audience' => 'ADMIN',
-            ]);
-            broadcast(new \App\Events\AnnouncementCreated($announcement));
-        } catch (\Throwable $e) {}
+        // Notify the affected DRIVER (the admin who made the change doesn't need an alert)
+        if ($driver->user_id) {
+            [$title, $body] = match (true) {
+                $status === 'Approved' && $hadPendingAppeal => ['Appeal Approved', 'Your appeal was approved. Your account is active again.'],
+                $status === 'Approved' => ['Account Approved', 'Your driver account is active. You can go on duty now.'],
+                $status === 'Suspended' => ['Account Suspended', $driver->suspension_reason ?: 'Your driver account was suspended. You may submit an appeal.'],
+                $status === 'Rejected' => ['Application Rejected', $driver->suspension_reason ?: 'Your driver application was rejected. You may submit an appeal.'],
+                $status === 'Removed' => ['Account Removed', 'Your driver account was removed by TODA administration.'],
+                default => ['Account Status Updated', "Your account status is now {$status}."],
+            };
+            try {
+                \App\Models\Announcement::create([
+                    'created_by' => $user->id,
+                    'title' => $title,
+                    'message' => $body,
+                    'target_audience' => 'user_' . $driver->user_id,
+                ]);
+            } catch (\Throwable $e) {}
+            try {
+                app(\App\Services\PushService::class)->sendToUser($driver->user_id, $title, $body, '/', "compliance-{$driver->id}");
+            } catch (\Throwable $e) {}
+        }
 
         return response()->json([
             'status'            => 'success',

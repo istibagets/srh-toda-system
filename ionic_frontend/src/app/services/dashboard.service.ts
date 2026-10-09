@@ -103,6 +103,14 @@ export class DashboardService {
     return this.http.get<DashboardData>(`${environment.apiUrl}/home/dashboard`, { headers });
   }
 
+  submitAppeal(message: string, files: File[]): Observable<any> {
+    const form = new FormData();
+    form.append('appeal_message', message);
+    files.forEach((f) => form.append('appeal_attachments[]', f, f.name));
+    const headers = this.getAuthHeaders().set('Accept', 'application/json');
+    return this.http.post<any>(`${environment.apiUrl}/driver/appeal`, form, { headers });
+  }
+
   toggleDriverDuty(targetState?: boolean): Observable<any> {
     const headers = this.getAuthHeaders();
     const payload = targetState !== undefined ? { is_online: targetState, target_state: targetState } : {};

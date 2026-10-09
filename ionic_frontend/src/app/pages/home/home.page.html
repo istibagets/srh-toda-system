@@ -379,8 +379,8 @@
             <span class="size-hint">Max 10MB</span>
           </div>
 
-          <button type="button" class="submit-appeal-btn" (click)="submitAppealForm()">
-            Submit Appeal to TODA Admin
+          <button type="button" class="submit-appeal-btn" [disabled]="isSubmittingAppeal()" (click)="submitAppealForm()">
+            {{ isSubmittingAppeal() ? 'Submitting...' : 'Submit Appeal to TODA Admin' }}
           </button>
         </div>
         }
