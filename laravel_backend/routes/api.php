@@ -11,6 +11,31 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
+/*
+| Private WebSocket channel authorization for the token-based app. Laravel's default
+| /broadcasting/auth expects a session login, which this API does not use, so the bearer
+| token is resolved here and then the normal channel rules in routes/channels.php apply.
+*/
+Route::post('/broadcasting/auth', function (Request $request) {
+    $token = $request->bearerToken();
+    $user = null;
+    if ($token) {
+        $userId = \Illuminate\Support\Facades\Cache::get('api_token_' . $token);
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        if (!$user) {
+            $user = \App\Models\User::where('remember_token', $token)->first();
+            if ($user) {
+                \Illuminate\Support\Facades\Cache::put('api_token_' . $token, $user->id, now()->addDays(60));
+            }
+        }
+    }
+    if (!$user) {
+        return response()->json(['message' => 'Unauthenticated.'], 403);
+    }
+    $request->setUserResolver(fn () => $user);
+    return \Illuminate\Support\Facades\Broadcast::auth($request);
+});
+
 Route::get('/maintenance-status', function () {
     $isDown = app()->isDownForMaintenance() || file_exists(storage_path('framework/down'));
     return response()->json([

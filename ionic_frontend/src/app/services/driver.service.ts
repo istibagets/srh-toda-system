@@ -1362,6 +1362,7 @@ export class DriverService {
         heading: event.heading ? Number(event.heading) : undefined,
         speed: event.speed ? Number(event.speed) : undefined,
         rideId: event.rideId ?? event.ride_id ? Number(event.rideId ?? event.ride_id) : undefined,
+        status: event.rideStatus ?? event.ride_status ?? undefined,
       });
     }
   }

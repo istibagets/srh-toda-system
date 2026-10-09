@@ -35,3 +35,17 @@ Broadcast::channel('srh-ride-chat.{rideId}', function ($user, $rideId) {
         })
         ->exists();
 });
+
+// Private per-ride driver location channel: only the ride's passenger, assigned driver,
+// or an admin may subscribe, so a driver's live position never reaches unrelated users.
+Broadcast::channel('srh-ride-location.{rideId}', function ($user, $rideId) {
+    if (in_array($user->role, ['admin', 'superadmin'], true)) {
+        return true;
+    }
+    return \App\Models\Ride::where('id', (int) $rideId)
+        ->where(function ($query) use ($user) {
+            $query->where('passenger_id', $user->id)
+                  ->orWhere('driver_id', $user->id);
+        })
+        ->exists();
+});

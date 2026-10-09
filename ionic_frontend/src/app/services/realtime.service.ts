@@ -31,6 +31,15 @@ export class RealtimeService {
   private isConnectedSignal = signal<boolean>(false);
   readonly isConnected = computed(() => this.isConnectedSignal());
 
+  /** Increments every time the socket comes back after a drop (consumers resync once). */
+  private reconnectTick = signal<number>(0);
+  readonly reconnected = this.reconnectTick.asReadonly();
+  private hasConnectedOnce = false;
+
+  private rideLocationRideId: number | null = null;
+  private rideLocationRetry: ReturnType<typeof setTimeout> | null = null;
+  private rideLocationAttempts = 0;
+
   get echo(): Echo<any> | null {
     return this.echoInstance;
   }
@@ -67,7 +76,34 @@ export class RealtimeService {
             Accept: 'application/json',
           },
         },
-      });
+        // Private channels are authorised with the CURRENT login token each time (read at call
+        // time, so it still works if the user logged in after the socket was created).
+        channelAuthorization: {
+          transport: 'ajax',
+          endpoint: `${environment.apiUrl}/broadcasting/auth`,
+          customHandler: (
+            params: { socketId: string; channelName: string },
+            callback: (error: Error | null, data: any) => void
+          ) => {
+            const t = this.authService.token();
+            fetch(`${environment.apiUrl}/broadcasting/auth`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: t ? `Bearer ${t}` : '',
+              },
+              body: JSON.stringify({ socket_id: params.socketId, channel_name: params.channelName }),
+            })
+              .then((r) => {
+                if (!r.ok) throw new Error(`Channel auth failed (${r.status})`);
+                return r.json();
+              })
+              .then((data) => callback(null, data))
+              .catch((err) => callback(err, null));
+          },
+        },
+      } as any);
 
       window.Echo = this.echoInstance;
 
@@ -139,18 +175,25 @@ export class RealtimeService {
         .listen('.MaintenanceModeToggled', handleMaintenanceEvent)
         .listen('MaintenanceModeToggled', handleMaintenanceEvent);
 
-      // Listen on public GPS location channel
-      const handleGpsEvent = (e: any) => {
-        if (e && (e.driverId || e.driver_id)) {
-          this.driverService.handleLocationBroadcast(e);
-        }
-      };
+      // Driver GPS is NOT on a public channel any more: each active ride has its own private
+      // channel (see watchRideLocation) that only that ride's passenger and driver can join.
 
-      this.echoInstance
-        .channel('srh-toda-gps')
-        .listen('.tricycle.location', handleGpsEvent)
-        .listen('tricycle.location', handleGpsEvent)
-        .listen('TricycleLocationUpdated', handleGpsEvent);
+      // Connection health: Pusher/Reverb reconnects by itself, but any event sent while the
+      // socket was down is gone. Tell the app when the socket is back so it can resync once.
+      try {
+        const pusher: any = (this.echoInstance as any).connector?.pusher;
+        pusher?.connection?.bind('state_change', (states: { previous: string; current: string }) => {
+          if (states.current === 'connected') {
+            if (this.hasConnectedOnce && states.previous !== 'connected') {
+              this.reconnectTick.update((n) => n + 1);
+            }
+            this.hasConnectedOnce = true;
+            this.isConnectedSignal.set(true);
+          } else if (states.current === 'unavailable' || states.current === 'disconnected' || states.current === 'failed') {
+            this.isConnectedSignal.set(false);
+          }
+        });
+      } catch { }
 
       // Listen on public announcements channel
       const handleAnnouncementEvent = (e: any) => {
@@ -203,6 +246,47 @@ export class RealtimeService {
     } catch (err) {
       console.warn('[Realtime] Echo initialization notice:', err);
     }
+  }
+
+  /**
+   * Follows the driver's live position for ONE ride on its private channel. Pass null to stop.
+   * Safe to call repeatedly: it only re-subscribes when the ride changes.
+   */
+  watchRideLocation(rideId: number | null): void {
+    if (!this.echoInstance) return;
+    if (this.rideLocationRideId === rideId) return;
+
+    if (this.rideLocationRetry) { clearTimeout(this.rideLocationRetry); this.rideLocationRetry = null; }
+    if (this.rideLocationRideId !== null) {
+      try { this.echoInstance.leave(`srh-ride-location.${this.rideLocationRideId}`); } catch { }
+    }
+    this.rideLocationRideId = rideId;
+    if (rideId === null) return;
+
+    const token = this.authService.token();
+    if (token) this.updateAuthToken(token);
+
+    const handle = (e: any) => {
+      if (e && (e.driverId || e.driver_id)) this.driverService.handleLocationBroadcast(e);
+    };
+    try {
+      const channel: any = this.echoInstance.private(`srh-ride-location.${rideId}`);
+      channel.listen('.tricycle.location', handle).listen('tricycle.location', handle);
+      // A failed subscription (slow network, expired auth) is retried instead of silently lost
+      channel.subscribed?.(() => { this.rideLocationAttempts = 0; });
+      channel.error?.(() => this.retryRideLocation(rideId));
+    } catch {
+      this.retryRideLocation(rideId);
+    }
+  }
+
+  /** Backoff retry (3s, 6s, 12s … max 30s) for a private-channel subscription that failed. */
+  private retryRideLocation(rideId: number): void {
+    if (this.rideLocationRideId !== rideId) return;
+    this.rideLocationRideId = null;
+    try { this.echoInstance?.leave(`srh-ride-location.${rideId}`); } catch { }
+    const delay = Math.min(3000 * Math.pow(2, this.rideLocationAttempts++), 30000);
+    this.rideLocationRetry = setTimeout(() => this.watchRideLocation(rideId), delay);
   }
 
   updateAuthToken(token: string): void {

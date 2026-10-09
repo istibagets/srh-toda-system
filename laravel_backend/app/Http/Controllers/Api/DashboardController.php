@@ -796,13 +796,37 @@ class DashboardController extends Controller
         $lng = (float) $request->lng;
         $heading = $request->has('heading') ? (float) $request->heading : null;
         $speed = $request->has('speed') ? (float) $request->speed : null;
-        $rideId = $request->has('ride_id') ? (int) $request->ride_id : null;
+        // Resolve the ride on the SERVER (never trust a client-supplied ride id): the driver's
+        // position is shared only with the passenger of the ride the driver is actually serving.
+        $activeRide = Ride::where('driver_id', $user->id)
+            ->whereIn('status', ['accepted', 'en_route', 'arrived', 'in_transit'])
+            ->orderByDesc('id')
+            ->first();
+        $rideId = $activeRide ? (int) $activeRide->id : null;
 
-        // Push to every connected screen FIRST (before any cache/DB work) so the passenger sees
-        // the move as soon as possible; persistence for refresh/reconnect happens right after.
-        try {
-            \App\Events\TricycleLocationUpdated::dispatch($user->id, $lat, $lng, $heading, $speed, $rideId);
-        } catch (\Throwable $e) {}
+        // Privacy: an off-duty driver with no active ride is not tracked at all. Going on duty
+        // validates the geofence from the coordinates sent with that request, so nothing else
+        // needs this driver's position.
+        $profile = Driver::where('user_id', $user->id)->first();
+        $isReturning = !$rideId && Ride::where('driver_id', $user->id)->where('status', 'returning')->exists();
+        if (!$rideId && !$isReturning && (!$profile || !$profile->is_online)) {
+            return response()->json([
+                'status'          => 'success',
+                'lat'             => $lat,
+                'lng'             => $lng,
+                'heading'         => $heading,
+                'auto_off_duty'   => false,
+                'outside_minutes' => 0,
+            ]);
+        }
+
+        // Push to the ride's private channel FIRST (before any cache/DB work) so the passenger
+        // sees the move as soon as possible; persistence for refresh/reconnect happens right after.
+        if ($rideId) {
+            try {
+                \App\Events\TricycleLocationUpdated::dispatch($user->id, $lat, $lng, $heading, $speed, $rideId, $activeRide->status);
+            } catch (\Throwable $e) {}
+        }
 
         Cache::put("driver_location_{$user->id}", [
             'lat' => $lat,

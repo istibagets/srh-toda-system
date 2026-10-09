@@ -51,6 +51,7 @@ import {
   businessOutline,
 } from 'ionicons/icons';
 import { DriverService } from '../../services/driver.service';
+import { RealtimeService } from '../../services/realtime.service';
 import { AttachmentViewerService } from '../../services/attachment-viewer.service';
 import { DriverHeaderComponent } from '../../components/driver-header/driver-header.component';
 import { DutyButtonComponent } from '../../components/duty-button/duty-button.component';
@@ -94,6 +95,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   driverService = inject(DriverService);
   authService = inject(AuthService);
   dashboardService = inject(DashboardService);
+  private realtimeService = inject(RealtimeService);
   soundService = inject(SoundService);
   pushService = inject(PushService);
   route = inject(ActivatedRoute);
@@ -217,6 +219,16 @@ export class HomePage implements AfterViewInit, OnDestroy {
   private boundPageShowHandler = (): void => this.onGpsPageShow();
   private boundOnlineHandler = (): void => this.onGpsOnline();
   private lastBroadcastTime = 0;
+
+  // Re-run triggers for the map state sync: map finished loading, or a failed route fetch is due a retry
+  private mapLoadedTick = signal(0);
+  private routeRetryTick = signal(0);
+  private routeFetchFailed = false;
+  private routeRetryAttempts = 0;
+  private routeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastResyncAt = 0;
+  private readonly ROUTE_CACHE_KEY = 'srh_route_cache_v1';
+  private readonly ROUTE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
   private lastDriverBroadcastTime = 0;
   private lastRerouteTime = 0;
   private lastPassengerRerouteAt = 0;
@@ -812,7 +824,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     // Fetch the actual road trace without flashing straight lines
     const detailedCoords = await this.fetchRoadRouteBetweenPoints(fromLng, fromLat, toLng, toLat);
-    if (!detailedCoords || detailedCoords.length < 2 || !this.map) return;
+    if (!detailedCoords || detailedCoords.length < 2 || !this.map) {
+      if (this.routeFetchFailed) this.scheduleRouteRetry();
+      return;
+    }
+    this.routeRetryAttempts = 0;
 
     // Check if status has become arrived while fetching (pickup routeline must disappear)
     if (!this.authService.isPassenger()) {
@@ -902,7 +918,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
     color = '#2563eb'
   ): Promise<void> {
     const coords = await this.fetchRoadRouteBetweenPoints(fromLng, fromLat, toLng, toLat);
-    if (!coords || coords.length < 2 || !this.map) return;
+    if (!coords || coords.length < 2 || !this.map) {
+      if (this.routeFetchFailed) this.scheduleRouteRetry();
+      return;
+    }
 
     this.currentActiveRouteCoordinates = coords;
     this.currentRouteDestination = [toLng, toLat];
@@ -945,8 +964,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
 
     const cacheKey = `${fromLng.toFixed(4)},${fromLat.toFixed(4)}_${toLng.toFixed(4)},${toLat.toFixed(4)}`;
-    if (this.roadRouteCache.has(cacheKey)) {
-      return this.roadRouteCache.get(cacheKey)!;
+    const cached = this.readRouteCache(cacheKey);
+    if (cached) {
+      this.routeFetchFailed = false;
+      return cached;
     }
 
     // Cancel the previous fetch of the SAME route type only — never cross-cancel
@@ -966,27 +987,132 @@ export class HomePage implements AfterViewInit, OnDestroy {
       ? this.returnRouteAbortController!.signal
       : this.tripRouteAbortController!.signal;
 
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=false`;
-      const response = await fetch(url, { signal });
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.routes && data.routes.length > 0 && data.routes[0].geometry?.coordinates?.length > 1) {
-          const coords = data.routes[0].geometry.coordinates as [number, number][];
-          if (this.roadRouteCache.size > 150) this.roadRouteCache.clear();
-          this.roadRouteCache.set(cacheKey, coords);
+    // Two independent public routing servers: if one is slow or down, the other answers.
+    const path = `${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=false`;
+    const servers = [
+      `https://router.project-osrm.org/route/v1/driving/${path}`,
+      `https://routing.openstreetmap.de/routed-car/route/v1/driving/${path}`,
+    ];
+
+    for (const url of servers) {
+      if (signal.aborted) return []; // superseded by a newer request: not a failure
+      try {
+        const coords = await this.fetchRouteWithTimeout(url, signal, 7000);
+        if (coords) {
+          this.writeRouteCache(cacheKey, coords);
+          this.routeFetchFailed = false;
           return coords;
         }
+      } catch (e: any) {
+        if (e?.name === 'AbortError' && signal.aborted) return [];
+        // timeout / network error: try the next server
       }
-    } catch (e: any) {
-      if (e?.name === 'AbortError') {
-        // Return empty array on abort — NEVER overwrite an existing valid route line with a straight fallback
-        return [];
-      }
-      console.warn('OSRM route fetch notice:', e);
     }
 
-    return this.buildFallbackRoadRoute(fromLng, fromLat, toLng, toLat);
+    // Never draw a straight line across buildings as a "fallback": show nothing and retry
+    // automatically (backoff, and again as soon as the network is back).
+    this.routeFetchFailed = true;
+    return [];
+  }
+
+  private async fetchRouteWithTimeout(url: string, outer: AbortSignal, ms: number): Promise<[number, number][] | null> {
+    const ctrl = new AbortController();
+    const onOuterAbort = () => ctrl.abort();
+    outer.addEventListener('abort', onOuterAbort);
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      const response = await fetch(url, { signal: ctrl.signal });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+      return coords && coords.length > 1 ? coords : null;
+    } finally {
+      clearTimeout(timer);
+      outer.removeEventListener('abort', onOuterAbort);
+    }
+  }
+
+  // --- Route cache: memory first, then localStorage (survives reloads, works offline) ---
+  private readRouteCache(key: string): [number, number][] | null {
+    const mem = this.roadRouteCache.get(key);
+    if (mem) return mem;
+    try {
+      const raw = localStorage.getItem(this.ROUTE_CACHE_KEY);
+      if (!raw) return null;
+      const store = JSON.parse(raw) as Record<string, { t: number; c: [number, number][] }>;
+      const hit = store[key];
+      if (hit && Date.now() - hit.t < this.ROUTE_CACHE_TTL_MS && Array.isArray(hit.c) && hit.c.length > 1) {
+        this.roadRouteCache.set(key, hit.c);
+        return hit.c;
+      }
+    } catch { }
+    return null;
+  }
+
+  private writeRouteCache(key: string, coords: [number, number][]): void {
+    if (this.roadRouteCache.size > 150) this.roadRouteCache.clear();
+    this.roadRouteCache.set(key, coords);
+    try {
+      const raw = localStorage.getItem(this.ROUTE_CACHE_KEY);
+      const store: Record<string, { t: number; c: [number, number][] }> = raw ? JSON.parse(raw) : {};
+      store[key] = { t: Date.now(), c: coords };
+      const keys = Object.keys(store);
+      if (keys.length > 12) {
+        keys.sort((x, y) => store[x].t - store[y].t);
+        for (const k of keys.slice(0, keys.length - 12)) delete store[k];
+      }
+      localStorage.setItem(this.ROUTE_CACHE_KEY, JSON.stringify(store));
+    } catch { /* storage full or blocked: the memory cache still works */ }
+  }
+
+  /** Retries a failed route fetch with backoff (only ever runs after a failure, never as polling). */
+  private scheduleRouteRetry(): void {
+    if (this.routeRetryTimer) return;
+    const delays = [2000, 5000, 12000, 30000];
+    if (this.routeRetryAttempts >= delays.length) return; // resumes when the network returns
+    const delay = delays[this.routeRetryAttempts++];
+    this.routeRetryTimer = setTimeout(() => {
+      this.routeRetryTimer = null;
+      this.routeRetryTick.update((n) => n + 1);
+    }, delay);
+  }
+
+  /** Network is back / app is visible again / socket reconnected: retry routes and pull the latest ride state once. */
+  private resyncTripState(force = false): void {
+    const now = Date.now();
+    if (!force && now - this.lastResyncAt < 2500) return;
+    this.lastResyncAt = now;
+    if (this.routeFetchFailed) {
+      this.routeRetryAttempts = 0;
+      this.routeRetryTick.update((n) => n + 1);
+    }
+    if (this.authService.isPassenger()) {
+      this.resyncPassengerRide();
+    } else {
+      this.refreshDashboard();
+    }
+  }
+
+  private static readonly RIDE_RANK: Record<string, number> = {
+    accepted: 4, en_route: 5, arrived: 6, in_transit: 7,
+  };
+
+  /** Asks the server for the passenger's current ride and applies it only if something changed. */
+  private resyncPassengerRide(): void {
+    const before = String(this.activePassengerRide()?.status || '').toLowerCase().trim();
+    this.dashboardService.getActiveRide().subscribe({
+      next: (res) => {
+        const ride = res?.active_ride || res?.ride;
+        const after = String(ride?.status || '').toLowerCase().trim();
+        if (after !== before) {
+          this.applyActiveRideResponse(res);
+        } else if (ride && after) {
+          // Same status: quietly refresh details (driver, coordinates) without moving the camera
+          this.activePassengerRide.update((r) => (r ? { ...r, ...ride, status: after } : r));
+        }
+      },
+      error: () => { /* keep what we have; the next trigger (reconnect, online, visible) retries */ },
+    });
   }
 
   clearRouteLine(): void {
@@ -997,41 +1123,39 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   checkPassengerActiveRide(): void {
     this.dashboardService.getActiveRide().subscribe({
-      next: (res) => {
-        const ride = res?.active_ride || res?.ride;
-        const status = String(ride?.status || '').toLowerCase().trim();
-        const hasActiveTrip = !!ride && ['accepted', 'en_route', 'arrived', 'in_transit', 'fare_proposed', 'bargaining', 'searching'].includes(status);
-        if (hasActiveTrip) {
-          this.activePassengerRide.set(ride);
-          try {
-            localStorage.setItem(this.PASSENGER_RIDE_KEY, JSON.stringify(ride));
-          } catch { }
-          this.syncPassengerDriverTricycleMarker();
-
-          if (['accepted', 'en_route', 'arrived', 'in_transit'].includes(status)) {
-            this.isUserPanned.set(false);
-            this.mapControlState.set(3);
-            // Wait for map to be ready then draw the route (which snaps & orients everything)
-            this.waitForMapAndDrawRoute(ride);
-          }
-        } else {
-          this.activePassengerRide.set(null);
-          try {
-            localStorage.removeItem(this.PASSENGER_RIDE_KEY);
-          } catch { }
-          this.clearRouteLine();
-          this.syncPassengerDriverTricycleMarker();
-        }
-      },
+      next: (res) => this.applyActiveRideResponse(res),
       error: () => {
-        this.activePassengerRide.set(null);
-        try {
-          localStorage.removeItem(this.PASSENGER_RIDE_KEY);
-        } catch { }
-        this.clearRouteLine();
-        this.syncPassengerDriverTricycleMarker();
-      }
+        // A slow or failed request must NOT erase the ride the passenger is on: keep the last
+        // known state (it is cached on the device) and let the next trigger refresh it.
+      },
     });
+  }
+
+  private applyActiveRideResponse(res: any): void {
+    const ride = res?.active_ride || res?.ride;
+    const status = String(ride?.status || '').toLowerCase().trim();
+    const hasActiveTrip = !!ride && ['accepted', 'en_route', 'arrived', 'in_transit', 'fare_proposed', 'bargaining', 'searching'].includes(status);
+    if (hasActiveTrip) {
+      this.activePassengerRide.set(ride);
+      try {
+        localStorage.setItem(this.PASSENGER_RIDE_KEY, JSON.stringify(ride));
+      } catch { }
+      this.syncPassengerDriverTricycleMarker();
+
+      if (['accepted', 'en_route', 'arrived', 'in_transit'].includes(status)) {
+        this.isUserPanned.set(false);
+        this.mapControlState.set(3);
+        // Wait for map to be ready then draw the route (which snaps & orients everything)
+        this.waitForMapAndDrawRoute(ride);
+      }
+    } else {
+      this.activePassengerRide.set(null);
+      try {
+        localStorage.removeItem(this.PASSENGER_RIDE_KEY);
+      } catch { }
+      this.clearRouteLine();
+      this.syncPassengerDriverTricycleMarker();
+    }
   }
 
   /**
@@ -1417,8 +1541,28 @@ export class HomePage implements AfterViewInit, OnDestroy {
       });
     });
 
+    // Follow the driver's live position on this ride's PRIVATE channel (and leave it afterwards)
+    effect(() => {
+      const isPassenger = this.authService.isPassenger();
+      const ride = this.activePassengerRide();
+      const st = String(ride?.status || '').toLowerCase().trim();
+      const active = isPassenger && !!ride && ['accepted', 'en_route', 'arrived', 'in_transit'].includes(st);
+      const rideId = active ? Number(String(ride.id).replace(/\D/g, '')) : null;
+      untracked(() => this.realtimeService.watchRideLocation(rideId && !isNaN(rideId) ? rideId : null));
+    });
+
+    // The live socket dropped and came back: anything broadcast meanwhile was lost, so resync once
+    effect(() => {
+      const ticks = this.realtimeService.reconnected();
+      if (!ticks) return;
+      untracked(() => this.resyncTripState(true));
+    });
+
     // Reactive Road-Tracing Route Line Sync for Passenger & Driver (Locked 3D Navigation)
     effect(() => {
+      // Re-applied automatically when the map finishes loading or a failed route fetch is retried
+      this.mapLoadedTick();
+      this.routeRetryTick();
       const isPassenger = this.authService.isPassenger();
       const pRide = this.activePassengerRide();
       const dTrip = this.driverService.activeTrip();
@@ -1536,6 +1680,14 @@ export class HomePage implements AfterViewInit, OnDestroy {
           const status = String(ride.status || '').toLowerCase().trim();
           const prevRide = this.activePassengerRide();
           const prevStatus = String(prevRide?.status || '').toLowerCase().trim();
+
+          // A late/out-of-order event (e.g. 'en_route' arriving after 'in_transit') must not undo
+          // progress: ignore it and ask the server for the truth instead.
+          const rank = HomePage.RIDE_RANK;
+          if (prevRide && Number(prevRide.id) === Number(ride.id) && rank[prevStatus] && rank[status] && rank[status] < rank[prevStatus]) {
+            this.resyncTripState(true);
+            return;
+          }
 
           if (['accepted', 'en_route', 'arrived', 'in_transit'].includes(status)) {
             const merged = {
@@ -1694,6 +1846,14 @@ export class HomePage implements AfterViewInit, OnDestroy {
             // The driver's reported position is authoritative from now on (incl. a manual
             // override): the passenger's own GPS must never move the tricycle again.
             this.lastDriverBroadcastTime = Date.now();
+
+            // Self-healing: the location tick carries the ride's current status. If it is ahead of
+            // what this screen shows, a status event was missed (slow network, brief disconnect).
+            const liveStatus = String(loc.status || '').toLowerCase().trim();
+            const rankMap = HomePage.RIDE_RANK;
+            if (liveStatus && rankMap[liveStatus] && rankMap[liveStatus] > (rankMap[pStatus] || 0)) {
+              this.resyncTripState();
+            }
 
             // Face along the route path at the driver's position; fall back to the reported heading
             const routeHeading = this.routeHeadingAt(loc.lng, loc.lat);
@@ -2371,6 +2531,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
           if (!isWalkInOrWayside && hasTargetCoord) {
             const color = isEnRoute ? '#2563eb' : '#059669';
+            // The old line starts somewhere else now: remove it so nothing is stretched or
+            // straight-lined while the new road route loads (cached routes appear instantly).
+            this.clearReturnRoutePolyline();
             // Asynchronously draw the real road curve without blocking the immediate UI update
             this.drawRoadRouteLine(roadLng, roadLat, targetLng, targetLat, color, true);
           } else {
@@ -2468,6 +2631,10 @@ export class HomePage implements AfterViewInit, OnDestroy {
         if (!this.authService.isPassenger() && this.driverService.isReturning()) {
           this.updateReturnRoutePolyline(this.driverLng(), this.driverLat());
         }
+
+        // Everything the map needs (route lines, pins) can only be drawn now: re-apply the
+        // current trip state so a ride that was already active when the map loaded is shown.
+        this.mapLoadedTick.update((n) => n + 1);
       });
 
       mapInstance.on('styleimagemissing', (e: any) => {
@@ -3120,6 +3287,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
     const coords = this.currentActiveRouteCoordinates;
     if (!coords || coords.length < 2) return;
     if (frameTime - this.lastRouteSyncAt < 30) return; // ~30fps is plenty for a line
+    // Only glue the line to the icon while the icon is on top of the route start. After a jump
+    // (location override, reroute) the old line must not be stretched to the new position.
+    if (this.calculateDistanceMeters(lat, lng, coords[0][1], coords[0][0]) > 25) return;
     this.lastRouteSyncAt = frameTime;
     try {
       const source: any = this.map.getSource('terminal-return-route-source');
@@ -3495,18 +3665,21 @@ export class HomePage implements AfterViewInit, OnDestroy {
       this.stopGpsWatchOnly();
     } else {
       this.resumeGpsTracking();
+      this.resyncTripState(); // events sent while the app was in the background are gone
     }
   }
 
   private onGpsPageShow(): void {
     if (typeof document === 'undefined' || !document.hidden) {
       this.resumeGpsTracking();
+      this.resyncTripState(); // iOS restores the page from its cache without visibilitychange
     }
   }
 
   private onGpsOnline(): void {
     if (typeof document === 'undefined' || !document.hidden) {
       this.resumeGpsTracking(true);
+      this.resyncTripState(true); // network is back: retry routes and refresh the ride once
     }
   }
 
@@ -3673,10 +3846,6 @@ export class HomePage implements AfterViewInit, OnDestroy {
     return this.fetchRoadRouteBetweenPoints(driverLng, driverLat, this.TERMINAL_LNG, this.TERMINAL_LAT, 'return');
   }
 
-  private buildFallbackRoadRoute(fromLng: number, fromLat: number, toLng: number, toLat: number): [number, number][] {
-    return [[fromLng, fromLat], [toLng, toLat]];
-  }
-
   private async updateReturnRoutePolyline(driverLng: number, driverLat: number): Promise<void> {
     if (!this.map) return;
 
@@ -3687,7 +3856,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
     this.lastRoutedCoords = { lat: driverLat, lng: driverLng };
 
     const coordinates = await this.fetchRoadRouteToTerminal(driverLng, driverLat);
-    if (!coordinates || coordinates.length < 2 || !this.map) return;
+    if (!coordinates || coordinates.length < 2 || !this.map) {
+      // Failed (not just aborted): allow the very next GPS fix to try again
+      if (this.routeFetchFailed) this.lastRoutedCoords = null;
+      return;
+    }
 
     this.currentRouteDestination = [this.TERMINAL_LNG, this.TERMINAL_LAT];
     this.currentRouteColor = '#2563eb';
@@ -4165,6 +4338,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
   private broadcastDriverLocationThrottled(lat: number, lng: number, heading: number, speed: number | null): void {
     if (this.authService.isPassenger()) return;
+    // Privacy: an off-duty driver with no trip and not returning is not tracked at all
+    if (!this.driverService.isOnline() && !this.driverService.activeTrip() && !this.driverService.isReturning()) return;
     const now = Date.now();
     // ~2 updates per second: the passenger's tricycle trails the driver by well under a second
     if (now - this.lastBroadcastTime < 150) return;
