@@ -189,7 +189,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   // ── Floating power / map buttons: distance (px) above the bottom sheet ──────────
   // Adjust these two numbers independently. Higher = buttons sit higher above the sheet.
   private readonly BUTTON_LIFT_DEFAULT = 72; // Android & desktop
-  private readonly BUTTON_LIFT_IOS = 90;     // iPhone / iPad
+  private readonly BUTTON_LIFT_IOS = 85;     // iPhone / iPad
   private readonly isIOS =
     typeof navigator !== 'undefined' &&
     (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -1264,6 +1264,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
   private compassLastBearing = 0;
   private coneCumulativeHeading = 0;
   private lastCompassCameraTime = 0;
+  private lastMarkerTargetAt = 0;
+  private markerTweenDuration = 450;
   private compassListenerType: string | null = null;
   private compassRafId: number | null = null;
   private lastCompassUpdateTime = 0;
@@ -2888,9 +2890,19 @@ export class HomePage implements AfterViewInit, OnDestroy {
     // (picks up from the current interpolated value) instead of canceling + restarting,
     // which eliminates rubber-banding on rapid consecutive GPS ticks.
     this.driverTweenTarget = nextLngLat;
+
+    // Glide for roughly as long as fixes take to arrive (~1s) so the marker keeps moving
+    // between GPS ticks instead of lurching and stopping; clamp for very fast/slow updates.
+    const nowMs = performance.now();
+    const sinceLastTarget = nowMs - this.lastMarkerTargetAt;
+    this.lastMarkerTargetAt = nowMs;
+    duration = Math.min(1200, Math.max(duration, sinceLastTarget * 1.05));
+
     if (this.markerAnimRafId !== null) {
+      this.markerTweenDuration = duration;
       return;
     }
+    this.markerTweenDuration = duration;
 
     const startPoint: [number, number] = [cur[0], cur[1]];
     let from: [number, number] = startPoint;
@@ -2911,8 +2923,9 @@ export class HomePage implements AfterViewInit, OnDestroy {
         t0 = currentTime;
       }
 
-      const progress = Math.min((currentTime - t0) / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
+      const progress = Math.min((currentTime - t0) / this.markerTweenDuration, 1);
+      // Gentle ease-out: close to linear (no stop-start), settles softly at the target
+      const ease = 1 - Math.pow(1 - progress, 1.6);
 
       const currentLng = from[0] + (to[0] - from[0]) * ease;
       const currentLat = from[1] + (to[1] - from[1]) * ease;
@@ -3595,7 +3608,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
     return { point: bestPoint, segIndex: bestSegIndex, distMeters };
   }
 
-  private smoothedGps: { lat: number; lng: number; time: number } | null = null;
+  private smoothedGps: { lat: number; lng: number; time: number; variance: number } | null = null;
 
   /**
    * Position filter for raw GPS fixes. Returns the smoothed position to use, or null
@@ -3608,24 +3621,24 @@ export class HomePage implements AfterViewInit, OnDestroy {
     speed: number | null,
     now: number
   ): { lat: number; lng: number } | null {
-    const acc = accuracy !== null && accuracy !== undefined && !isNaN(accuracy) ? accuracy : 30;
+    const acc = Math.max(3, accuracy !== null && accuracy !== undefined && !isNaN(accuracy) ? accuracy : 30);
     const prev = this.smoothedGps;
-    const accept = (p: { lat: number; lng: number }) => {
-      this.smoothedGps = { lat: p.lat, lng: p.lng, time: now };
+    const accept = (p: { lat: number; lng: number }, variance: number) => {
+      this.smoothedGps = { lat: p.lat, lng: p.lng, time: now, variance };
       return p;
     };
 
-    if (!prev) return accept({ lat, lng });
+    if (!prev) return accept({ lat, lng }, acc * acc);
 
     const gap = now - prev.time;
     const dist = this.calculateDistanceMeters(prev.lat, prev.lng, lat, lng);
 
     // Long silence, or a confident fix far away (e.g. after GPS dropout): jump to it
-    if (gap > 20000 || (dist > 300 && acc < 50)) return accept({ lat, lng });
+    if (gap > 20000 || (dist > 300 && acc < 50)) return accept({ lat, lng }, acc * acc);
 
     // Coarse cell/Wi-Fi fixes: no deadband (they would never pass it), just ease toward them
     if (acc > 600) {
-      return accept({ lat: prev.lat + (lat - prev.lat) * 0.4, lng: prev.lng + (lng - prev.lng) * 0.4 });
+      return accept({ lat: prev.lat + (lat - prev.lat) * 0.4, lng: prev.lng + (lng - prev.lng) * 0.4 }, acc * acc);
     }
 
     // Poor fix while we recently had a better one: ignore it
@@ -3633,11 +3646,22 @@ export class HomePage implements AfterViewInit, OnDestroy {
 
     const hasSpeed = speed !== null && speed !== undefined && !isNaN(speed);
     const moving = hasSpeed ? (speed as number) > 1.0 : dist > acc;
-    const deadband = moving ? Math.max(2, acc * 0.25) : Math.max(5, acc * 0.8);
-    if (dist < deadband) return null;
 
-    const alpha = moving ? (acc <= 15 ? 0.7 : 0.5) : 0.3;
-    return accept({ lat: prev.lat + (lat - prev.lat) * alpha, lng: prev.lng + (lng - prev.lng) * alpha });
+    // Parked: ignore wander inside the accuracy circle so the marker stays rock steady
+    if (!moving && dist < Math.max(4, acc * 0.7)) return null;
+
+    // 1-D Kalman filter on position. Uncertainty grows with time and expected speed, then
+    // each fix pulls the estimate by a gain based on its reported accuracy: precise fixes
+    // are trusted (marker tracks the real position), noisy ones barely nudge it (smooth).
+    const dt = Math.min(gap, 5000) / 1000;
+    const expectedSpeed = moving ? Math.max(hasSpeed ? (speed as number) : 0, 2) : 0.5;
+    const variance = prev.variance + dt * expectedSpeed * expectedSpeed;
+    const gain = variance / (variance + acc * acc);
+
+    return accept(
+      { lat: prev.lat + (lat - prev.lat) * gain, lng: prev.lng + (lng - prev.lng) * gain },
+      (1 - gain) * variance
+    );
   }
 
   private handleGpsUpdate(pos: GeolocationPosition): void {
