@@ -614,7 +614,7 @@
   --border-radius: 28px 28px 0 0;
   --background: #ffffff;
   --height: auto;
-  --max-height: 92vh;
+  --max-height: 92dvh;
   align-items: flex-end;
 
   @media (min-width: 640px) {
@@ -627,7 +627,7 @@
 .modal-card-container {
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  max-height: 90dvh;
   background: #ffffff;
   padding: 18px 18px calc(24px + env(safe-area-inset-bottom, 8px)) 18px;
   overflow-y: auto;

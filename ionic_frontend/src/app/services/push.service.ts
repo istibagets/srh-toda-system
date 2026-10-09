@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, effect, untracked } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
@@ -23,8 +23,40 @@ export class PushService {
     return this.isSubscribed() && !!this.lastSyncedEndpoint;
   }
 
+  private lastToken: string | null = null;
+
   constructor() {
     this.initServiceWorker();
+
+    // Whenever the session changes (login, switch account, logout) re-link this device's
+    // push subscription to the current user, and release it for the previous one.
+    effect(() => {
+      const token = this.authService.token();
+      untracked(() => {
+        const previous = this.lastToken;
+        this.lastToken = token;
+        if (previous === token) return;
+
+        if (previous) this.detachDeviceFromSession(previous);
+        this.lastSyncedEndpoint = null;
+        if (token && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          setTimeout(() => this.syncExistingSubscription().catch(() => {}), 300);
+        }
+      });
+    });
+  }
+
+  /** Tell the backend this device no longer belongs to the previous session's user. */
+  private async detachDeviceFromSession(oldToken: string): Promise<void> {
+    try {
+      const sub = await this.swRegistration?.pushManager.getSubscription();
+      if (!sub) return;
+      const headers = new HttpHeaders({ Authorization: `Bearer ${oldToken}` });
+      this.http.post(`${environment.apiUrl}/push/unsubscribe`, { endpoint: sub.endpoint }, { headers }).subscribe({
+        next: () => {},
+        error: () => {},
+      });
+    } catch { }
   }
 
   /**
@@ -120,11 +152,14 @@ export class PushService {
    * Send the PushSubscription JSON to Laravel Backend
    */
   private async sendSubscriptionToBackend(subscription: PushSubscription): Promise<void> {
-    if (this.lastSyncedEndpoint === subscription.endpoint || this.isSyncing) {
-      return;
-    }
     const token = this.authService.token() || localStorage.getItem('srh_auth_token') || localStorage.getItem('srh_toda_token');
     if (!token) return;
+    // Keyed by endpoint AND session, so logging in as a different user on the same device
+    // re-links the subscription to that user instead of being skipped.
+    const syncKey = `${subscription.endpoint}|${token}`;
+    if (this.lastSyncedEndpoint === syncKey || this.isSyncing) {
+      return;
+    }
 
     this.isSyncing = true;
     const subJson = subscription.toJSON();
@@ -145,7 +180,7 @@ export class PushService {
     this.http.post(url, payload, { headers }).subscribe({
       next: () => {
         this.isSyncing = false;
-        this.lastSyncedEndpoint = subscription.endpoint;
+        this.lastSyncedEndpoint = syncKey;
         this.isSubscribed.set(true);
         console.log('[PushService] Subscription registered with Laravel backend.');
       },

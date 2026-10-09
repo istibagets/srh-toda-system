@@ -1,4 +1,4 @@
-import { getTabBarHeight } from '../../utils/layout';
+import { getTabBarHeight, measureNaturalHeight } from '../../utils/layout';
 import {
   Component,
   inject,
@@ -148,26 +148,29 @@ export class PassengerSheetComponent implements AfterViewInit, OnDestroy {
     return Math.max(0, window.innerHeight - getTabBarHeight() - 250);
   }
 
+  /** Measured content height while a ride is active (0 until measured). */
+  private measuredVisible = 0;
+
+  private refreshMeasuredHeight(): boolean {
+    const next = this.activeRide() ? measureNaturalHeight(this.sheetRef()?.nativeElement) : 0;
+    const changed = Math.abs(next - this.measuredVisible) > 2;
+    this.measuredVisible = next;
+    return changed;
+  }
+
   get MID_TRANSLATE_Y(): number {
     const ride = this.activeRide();
     if (ride) {
       const status = String(ride.status || '').toLowerCase().trim();
-      if (status === 'fare_proposed') {
-        return Math.max(15, window.innerHeight - getTabBarHeight() - 292);
-      }
-      if (status === 'accepted') {
-        return Math.max(20, window.innerHeight - getTabBarHeight() - 252);
-      }
-      if (status === 'en_route') {
-        return Math.max(20, window.innerHeight - getTabBarHeight() - 256);
-      }
-      if (status === 'arrived') {
-        return Math.max(20, window.innerHeight - getTabBarHeight() - 256);
-      }
-      if (status === 'in_transit') {
-        return Math.max(25, window.innerHeight - getTabBarHeight() - 256);
-      }
-      return Math.max(20, window.innerHeight - getTabBarHeight() - 280); // Searching / Alerting
+      let visible: number;
+      if (status === 'fare_proposed') visible = 292;
+      else if (status === 'accepted') visible = 252;
+      else if (status === 'en_route' || status === 'arrived') visible = 256;
+      else if (status === 'in_transit') visible = 256;
+      else visible = 280; // Searching / Alerting
+      // Never show less than the measured content height (fixes clipping on iPhone)
+      visible = Math.min(Math.max(visible, this.measuredVisible), Math.round(window.innerHeight * 0.8));
+      return Math.max(15, window.innerHeight - getTabBarHeight() - visible);
     }
     return Math.max(40, window.innerHeight - getTabBarHeight() - 235); // Default booking hub
   }
@@ -205,6 +208,13 @@ export class PassengerSheetComponent implements AfterViewInit, OnDestroy {
       const ride = this.activeRide();
       untracked(() => {
         this.setSnap('mid');
+        // Re-fit once the new ride state has rendered, and again after fonts/late content
+        setTimeout(() => {
+          if (this.refreshMeasuredHeight() && this.snapState() === 'mid') this.setSnap('mid');
+        }, 60);
+        setTimeout(() => {
+          if (this.refreshMeasuredHeight() && this.snapState() === 'mid') this.setSnap('mid');
+        }, 450);
       });
     });
   }
@@ -241,6 +251,7 @@ export class PassengerSheetComponent implements AfterViewInit, OnDestroy {
   private handleWindowResize(): void {
     const sheet = this.sheetRef()?.nativeElement;
     if (!sheet) return;
+    this.refreshMeasuredHeight();
     const snap = this.snapState();
     if (snap === 'min') {
       this.activeTranslateY = this.MAX_TRANSLATE_Y;

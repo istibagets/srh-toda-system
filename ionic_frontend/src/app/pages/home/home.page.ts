@@ -1312,6 +1312,19 @@ export class HomePage implements AfterViewInit, OnDestroy {
     });
 
     // Auto-persist active passenger ride to localStorage for 0ms instant reload restoration
+    // Event-driven recovery: when a driver is (re)approved while the app is open, the map
+    // container is created fresh by the template. Rebuild the map on it automatically.
+    effect(() => {
+      const status = this.driverService.driver().complianceStatus;
+      const isPassenger = this.authService.isPassenger();
+      untracked(() => {
+        if (status === 'Approved' && !isPassenger) {
+          setTimeout(() => this.ensureMapMatchesView(), 120);
+          setTimeout(() => this.ensureMapMatchesView(), 600);
+        }
+      });
+    });
+
     effect(() => {
       const ride = this.activePassengerRide();
       if (typeof window !== 'undefined') {
@@ -2114,6 +2127,43 @@ export class HomePage implements AfterViewInit, OnDestroy {
       left: 0,
       right: 0,
     };
+  }
+
+  /** Re-creates the map when its container was destroyed/replaced (e.g. after reinstatement). */
+  private ensureMapMatchesView(): void {
+    const container = document.getElementById('grab-home-map');
+    if (!container) return;
+
+    let attached = false;
+    try {
+      attached = !!this.map && this.map.getContainer() === container && document.body.contains(container);
+    } catch { attached = false; }
+
+    if (attached) {
+      try { this.map.resize(); } catch { }
+      return;
+    }
+
+    if (this.markerAnimRafId !== null) {
+      cancelAnimationFrame(this.markerAnimRafId);
+      this.markerAnimRafId = null;
+    }
+    this.driverTweenTarget = null;
+    this.markerCurrentLngLat = null;
+    if (this.driverMarker) {
+      try { this.driverMarker.remove(); } catch { }
+      this.driverMarker = null;
+    }
+    if (this.map) {
+      try { this.map.remove(); } catch { }
+      this.map = null;
+    }
+    // Template elements were recreated: drop stale cached references
+    this.cachedPowerEl = null;
+    this.cachedMapControlsEl = null;
+    this.cachedHeaderEl = null;
+
+    this.initMapTilerMap();
   }
 
   // --- 1. MAP INITIALIZATION ---

@@ -210,7 +210,7 @@ export class DriverService {
             try {
               const loc = JSON.parse(e.newValue);
               this.handleLocationBroadcast(loc);
-            } catch {}
+            } catch { }
           }
         });
       } catch (e) {
@@ -423,7 +423,7 @@ export class DriverService {
           totalQueueCount: nextPos,
         }));
         localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(this.queueSignal()));
-      } catch {}
+      } catch { }
 
       this.broadcastLiveUpdate();
 
@@ -469,7 +469,7 @@ export class DriverService {
           totalQueueCount: remainingCount,
         }));
         localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(reindexed));
-      } catch {}
+      } catch { }
 
       this.broadcastLiveUpdate();
 
@@ -479,7 +479,7 @@ export class DriverService {
       return {
         success: true,
         isOnline: false,
-        message: 'Off Duty. You have left the terminal queue.',
+        message: 'Off Duty. You went offline.',
       };
     }
   }
@@ -504,7 +504,7 @@ export class DriverService {
     this.activeTripSignal.set(trip);
     try {
       localStorage.setItem(this.ACTIVE_TRIP_KEY, JSON.stringify(trip));
-    } catch {}
+    } catch { }
 
     // Update driver state (departed / on trip -> queue position is null)
     this.driverSignal.update((d) => ({
@@ -526,7 +526,7 @@ export class DriverService {
 
     try {
       localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(this.queueSignal()));
-    } catch {}
+    } catch { }
 
     // Add driver to drivers on trip list
     this.driversOnTripSignal.update((list) => [
@@ -608,7 +608,7 @@ export class DriverService {
 
     try {
       localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(this.queueSignal()));
-    } catch {}
+    } catch { }
 
     // Transition to Returning to Terminal State
     this.isReturningSignal.set(true);
@@ -636,7 +636,7 @@ export class DriverService {
       localStorage.setItem(this.RETURNING_KEY, 'true');
       localStorage.removeItem(this.ACTIVE_TRIP_KEY);
       localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.tripHistorySignal()));
-    } catch {}
+    } catch { }
 
     this.broadcastLiveUpdate();
 
@@ -686,7 +686,7 @@ export class DriverService {
     try {
       localStorage.setItem(this.ACTIVE_TRIP_KEY, JSON.stringify(trip));
       localStorage.removeItem(this.RETURNING_KEY);
-    } catch {}
+    } catch { }
 
     // Update driver state
     this.driverSignal.update((d) => ({
@@ -709,7 +709,7 @@ export class DriverService {
 
     try {
       localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(this.queueSignal()));
-    } catch {}
+    } catch { }
 
     // Update in-transit list
     this.driversOnTripSignal.update((list) => [
@@ -810,7 +810,7 @@ export class DriverService {
     this.activeTripSignal.set(null);
     try {
       localStorage.removeItem(this.ACTIVE_TRIP_KEY);
-    } catch {}
+    } catch { }
 
     if (wasPreTrip) {
       // Driver never left terminal - optimistically restore to #1 in queue instantly!
@@ -866,7 +866,7 @@ export class DriverService {
       } else {
         localStorage.removeItem(this.RETURNING_KEY);
       }
-    } catch {}
+    } catch { }
   }
 
   // ==========================================
@@ -880,7 +880,7 @@ export class DriverService {
     try {
       localStorage.removeItem(this.RETURNING_KEY);
       localStorage.removeItem(this.ACTIVE_TRIP_KEY);
-    } catch {}
+    } catch { }
 
     const queueList = this.queueSignal();
     const otherDrivers = queueList.filter(
@@ -916,7 +916,7 @@ export class DriverService {
         totalQueueCount: nextPos,
       }));
       localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(this.queueSignal()));
-    } catch {}
+    } catch { }
 
     // Remove from drivers on trip / transit
     this.driversOnTripSignal.update((list) => list.filter((t) => t.driverName !== current.name));
@@ -1004,7 +1004,7 @@ export class DriverService {
             queuePosition: this.driverSignal().queuePosition,
             totalQueueCount: this.driverSignal().totalQueueCount,
           }));
-        } catch {}
+        } catch { }
       }
 
       if (Array.isArray(dData.active_queue)) {
@@ -1056,7 +1056,7 @@ export class DriverService {
         }
 
         this.queueSignal.set(finalQueue);
-        
+
         // Sync own position and queue count only outside of toggle lock window
         const isLockActive = Date.now() - this.lastToggleTimestamp < 3000;
         if (!isLockActive) {
@@ -1086,7 +1086,7 @@ export class DriverService {
 
         try {
           localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(finalQueue));
-        } catch {}
+        } catch { }
       }
 
       if (Array.isArray(dData.drivers_in_transit)) {
@@ -1326,7 +1326,7 @@ export class DriverService {
     try {
       this.liveChannel?.postMessage({ type: 'QUEUE_UPDATED', time: Date.now() });
       localStorage.setItem('srh_live_sync_pulse', String(Date.now()));
-    } catch {}
+    } catch { }
   }
 
   broadcastRideCancelled(rideId?: number, passengerId?: number, driverId?: number): void {
@@ -1339,7 +1339,7 @@ export class DriverService {
         time: Date.now(),
       });
       localStorage.setItem('srh_ride_cancelled_pulse', String(Date.now()));
-    } catch {}
+    } catch { }
   }
 
   triggerLiveSync(): void {
@@ -1389,7 +1389,7 @@ export class DriverService {
         try {
           localStorage.removeItem(this.ACTIVE_TRIP_KEY);
           localStorage.removeItem(this.RETURNING_KEY);
-        } catch {}
+        } catch { }
         const current = this.driverSignal();
         const queueList = this.queueSignal();
         const otherDrivers = queueList.filter(
@@ -1422,7 +1422,7 @@ export class DriverService {
             totalQueueCount: updatedQueue.length,
           }));
           localStorage.setItem(this.QUEUE_CACHE_KEY, JSON.stringify(updatedQueue));
-        } catch {}
+        } catch { }
       } else if (isPassenger && Number(ride.passenger_id) === Number(currentUserId)) {
         this.rideCancelledNotice.set({
           role: 'passenger',
@@ -1442,7 +1442,7 @@ export class DriverService {
       this.activeTripSignal.set(null);
       try {
         localStorage.removeItem(this.ACTIVE_TRIP_KEY);
-      } catch {}
+      } catch { }
     }
 
     if (currentUserId && Number(ride.driver_id) === Number(currentUserId)) {
@@ -1519,10 +1519,10 @@ export class DriverService {
         rideId: coords.ride_id,
         time: Date.now(),
       }));
-    } catch {}
+    } catch { }
 
     this.dashboardService.updateDriverLocation(coords).subscribe({
-      next: () => {},
+      next: () => { },
       error: (err) => console.warn('Location broadcast notice:', err?.status),
     });
   }

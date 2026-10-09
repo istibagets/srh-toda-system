@@ -13,7 +13,7 @@ import {
   effect,
   untracked,
 } from '@angular/core';
-import { getTabBarHeight } from '../../utils/layout';
+import { getTabBarHeight, measureNaturalHeight } from '../../utils/layout';
 import { CommonModule } from '@angular/common';
 import { IonToast, ToastController } from '@ionic/angular';
 import { DriverService } from '../../services/driver.service';
@@ -106,6 +106,17 @@ export class QueueCardComponent implements AfterViewInit, OnDestroy {
     return 0; // 0px from top (full view)
   }
 
+  /** Measured content height of the current single-card state (0 until measured). */
+  private measuredVisible = 0;
+
+  private refreshMeasuredHeight(): boolean {
+    const single = !!this.driverService.activeTrip() || this.driverService.isReturning();
+    const next = single ? measureNaturalHeight(this.sheetRef()?.nativeElement) : 0;
+    const changed = Math.abs(next - this.measuredVisible) > 2;
+    this.measuredVisible = next;
+    return changed;
+  }
+
   get MID_TRANSLATE_Y(): number {
     let visibleHeight = 236; // Original online state docked height
     const active = this.driverService.activeTrip();
@@ -125,6 +136,10 @@ export class QueueCardComponent implements AfterViewInit, OnDestroy {
       }
     } else if (!this.driverService.isOnline()) {
       visibleHeight = 236; // Offline card
+    }
+    // Single-card states: never show less than the card's measured height (fixes clipping)
+    if (this.driverService.isReturning() || active) {
+      visibleHeight = Math.min(Math.max(visibleHeight, this.measuredVisible), Math.round(window.innerHeight * 0.8));
     }
     return Math.max(20, window.innerHeight - getTabBarHeight() - visibleHeight);
   }
@@ -155,8 +170,13 @@ export class QueueCardComponent implements AfterViewInit, OnDestroy {
       const isOnline = this.driverService.isOnline();
       untracked(() => {
         setTimeout(() => {
+          this.refreshMeasuredHeight();
           this.setSnap('mid');
         }, 50);
+        // Second pass once fonts/late content have rendered
+        setTimeout(() => {
+          if (this.refreshMeasuredHeight() && this.snapState() === 'mid') this.setSnap('mid');
+        }, 450);
       });
     });
 
@@ -228,6 +248,7 @@ export class QueueCardComponent implements AfterViewInit, OnDestroy {
   private handleWindowResize(): void {
     const sheet = this.sheetRef()?.nativeElement;
     if (!sheet) return;
+    this.refreshMeasuredHeight();
     const snap = this.snapState();
     if (snap === 'min') {
       this.activeTranslateY = this.MAX_TRANSLATE_Y;

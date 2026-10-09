@@ -560,8 +560,8 @@
     align-items: center;
     overflow: hidden;
     width: 100%;
-    height: calc(100vh - 128px);
-    max-height: calc(100vh - 128px);
+    height: calc(100dvh - 128px);
+    max-height: calc(100dvh - 128px);
     box-sizing: border-box;
     cursor: grab;
     touch-action: none;
