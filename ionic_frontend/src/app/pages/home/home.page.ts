@@ -219,6 +219,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
   private lastBroadcastTime = 0;
   private lastDriverBroadcastTime = 0;
   private lastRerouteTime = 0;
+  private lastPassengerRerouteAt = 0;
   private currentActiveRouteCoordinates: [number, number][] = [];
   private currentRouteDestination: [number, number] | null = null;
   private currentRouteColor: string = '#2563eb';
@@ -864,6 +865,35 @@ export class HomePage implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Rebuilds the driver's routeline from the given position (trip pickup/destination or terminal). */
+  private refreshDriverRouteFrom(lng: number, lat: number): void {
+    if (this.authService.isPassenger()) return;
+    let tLng: number | null = null;
+    let tLat: number | null = null;
+    let color = '#2563eb';
+
+    if (this.driverService.isReturning()) {
+      tLng = this.TERMINAL_LNG;
+      tLat = this.TERMINAL_LAT;
+    } else {
+      const dTrip = this.driverService.activeTrip() as any;
+      const st = String(dTrip?.status || '').toLowerCase().trim();
+      if (!dTrip || (st !== 'en_route' && st !== 'in_transit')) return;
+      const isEnRoute = st === 'en_route';
+      const x = Number(isEnRoute ? (dTrip.pickupLng || dTrip.pickup_lng)
+        : (dTrip.dropoffLng || dTrip.dropoff_lng || dTrip.destinationLng || dTrip.destination_lng));
+      const y = Number(isEnRoute ? (dTrip.pickupLat || dTrip.pickup_lat)
+        : (dTrip.dropoffLat || dTrip.dropoff_lat || dTrip.destinationLat || dTrip.destination_lat));
+      if (!x || !y || isNaN(x) || isNaN(y)) return; // walk-in / wayside: no routeline
+      tLng = x;
+      tLat = y;
+      color = isEnRoute ? '#2563eb' : '#059669';
+    }
+
+    this.lastRerouteTime = Date.now();
+    this.fetchAndApplyReroute(lng, lat, tLng as number, tLat as number, color);
+  }
+
   private async fetchAndApplyReroute(
     fromLng: number,
     fromLat: number,
@@ -1113,7 +1143,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
    * Snaps any coordinate immediately to the nearest roadway centerline in 0ms.
    * Completely prevents vehicle marker from ever appearing in fields or outside road lane.
    */
-  snapToNearestRoad(lng: number, lat: number): [number, number] {
+  snapToNearestRoad(lng: number, lat: number, snapToActiveRoute = true): [number, number] {
     let nearestPoint: [number, number] = [lng, lat];
     let minDistanceSq = Infinity; // stored in metres²
 
@@ -1122,7 +1152,7 @@ export class HomePage implements AfterViewInit, OnDestroy {
         // 1. First priority: Snap to active route line if one exists on the map
         const activeRouteSource: any = this.map.getSource('terminal-return-route-source');
         const activeRouteData = activeRouteSource?._data || activeRouteSource?._options?.data;
-        if (activeRouteData?.geometry?.coordinates?.length > 1) {
+        if (snapToActiveRoute && activeRouteData?.geometry?.coordinates?.length > 1) {
           const coords = activeRouteData.geometry.coordinates as [number, number][];
           for (let i = 0; i < coords.length - 1; i++) {
             const a = coords[i];
@@ -1692,6 +1722,19 @@ export class HomePage implements AfterViewInit, OnDestroy {
                 if (remaining.length >= 2) {
                   this.currentActiveRouteCoordinates = remaining;
                   this.applyRouteLineCoordinates(remaining, this.currentRouteColor);
+                }
+              }
+              // Driver left the routeline (override or real movement): rebuild it from the
+              // driver's new position so the path always starts at the tricycle.
+              if (nearest.distMeters > 35 && Date.now() - this.lastPassengerRerouteAt > 2000) {
+                const st = String(this.activePassengerRide()?.status || '').toLowerCase().trim();
+                const ride: any = this.activePassengerRide();
+                const toDest = st === 'in_transit';
+                const tLat = Number(toDest ? (ride?.destination_lat || ride?.dest_lat) : ride?.pickup_lat);
+                const tLng = Number(toDest ? (ride?.destination_lng || ride?.dest_lng) : ride?.pickup_lng);
+                if (tLat && tLng && st !== 'arrived') {
+                  this.lastPassengerRerouteAt = Date.now();
+                  this.drawRoadRouteLine(loc.lng, loc.lat, tLng, tLat, toDest ? '#059669' : '#2563eb', true);
                 }
               }
             }
@@ -3937,7 +3980,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
         return;
       } else {
         // --- OFF ROUTE / Went the other way around ---
-        const [roadLng, roadLat] = this.snapToNearestRoad(rawLng, rawLat);
+        // Snap to real roads only: the (stale) route line is exactly what we're leaving.
+        const [roadLng, roadLat] = this.snapToNearestRoad(rawLng, rawLat, false);
         const now = Date.now();
 
         let moveHeading = this.driverHeading();
@@ -4339,6 +4383,8 @@ export class HomePage implements AfterViewInit, OnDestroy {
         } else {
           this.animateDriverMarkerTo(lng, lat, this.driverHeading(), 400);
           this.broadcastDriverLocationThrottled(lat, lng, this.driverHeading(), pos.coords.speed);
+          // The routeline must start from where the tricycle really is now
+          this.refreshDriverRouteFrom(lng, lat);
         }
 
         const isPassenger = this.authService.isPassenger();
