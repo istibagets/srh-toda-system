@@ -4921,7 +4921,11 @@ export class HomePage implements AfterViewInit, OnDestroy {
       ? this.calculateDistanceMeters(this.driverLat(), this.driverLng(), this.TERMINAL_LAT, this.TERMINAL_LNG)
       : (isOnline ? 999999 : 0);
 
-    const localResult = this.driverService.toggleDuty(isOnline, currentDist);
+    const localResult = this.driverService.toggleDuty(
+      isOnline,
+      currentDist,
+      this.hasGpsFix() ? { lat: this.driverLat(), lng: this.driverLng() } : undefined
+    );
     this.displayToast(localResult.message, isOnline && localResult.success ? 'success' : undefined);
     if (!localResult.success) {
       return;

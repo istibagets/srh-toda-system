@@ -111,9 +111,13 @@ export class DashboardService {
     return this.http.post<any>(`${environment.apiUrl}/driver/appeal`, form, { headers });
   }
 
-  toggleDriverDuty(targetState?: boolean): Observable<any> {
+  toggleDriverDuty(targetState?: boolean, coords?: { lat: number; lng: number }): Observable<any> {
     const headers = this.getAuthHeaders();
-    const payload = targetState !== undefined ? { is_online: targetState, target_state: targetState } : {};
+    const payload: Record<string, unknown> = targetState !== undefined ? { is_online: targetState, target_state: targetState } : {};
+    if (targetState && coords) {
+      payload['lat'] = coords.lat;
+      payload['lng'] = coords.lng;
+    }
     return this.http.post<any>(`${environment.apiUrl}/driver/toggle-duty`, payload, { headers });
   }
 

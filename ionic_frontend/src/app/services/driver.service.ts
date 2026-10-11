@@ -29,7 +29,7 @@ export class DriverService {
 
   isDutySyncing = signal<boolean>(false);
   showDutyLoading = signal<boolean>(false);
-  private dutyToggleSubject = new Subject<{ targetState: boolean; previousState: boolean }>();
+  private dutyToggleSubject = new Subject<{ targetState: boolean; previousState: boolean; coords?: { lat: number; lng: number } }>();
   private dutyLoadingTimer: any = null;
 
   // 1. Reactive Signal for Driver Profile
@@ -134,8 +134,8 @@ export class DriverService {
   constructor() {
     // Setup idempotent duty toggle pipeline (Instant 0ms Optimistic UI + Spam Protection)
     this.dutyToggleSubject.pipe(
-      switchMap(({ targetState, previousState }) => {
-        return this.dashboardService.toggleDriverDuty(targetState).pipe(
+      switchMap(({ targetState, previousState, coords }) => {
+        return this.dashboardService.toggleDriverDuty(targetState, coords).pipe(
           tap({
             next: (res) => {
               if (res?.is_online !== undefined) {
@@ -359,7 +359,7 @@ export class DriverService {
   // ==========================================
   // DUTY TOGGLE (Optimistic UI + Geofence Check)
   // ==========================================
-  toggleDuty(forcedState?: boolean, driverDistanceMeters?: number): { success: boolean; isOnline: boolean; message: string } {
+  toggleDuty(forcedState?: boolean, driverDistanceMeters?: number, coords?: { lat: number; lng: number }): { success: boolean; isOnline: boolean; message: string } {
     const current = this.driverSignal();
     const previousState = current.isOnline;
     const targetState = forcedState !== undefined ? forcedState : !previousState;
@@ -428,7 +428,7 @@ export class DriverService {
       this.broadcastLiveUpdate();
 
       // 2. Dispatch to Debounced & Idempotent Backend Pipeline
-      this.dutyToggleSubject.next({ targetState: true, previousState });
+      this.dutyToggleSubject.next({ targetState: true, previousState, coords });
 
       return {
         success: true,

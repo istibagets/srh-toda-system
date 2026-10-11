@@ -23,8 +23,10 @@ class OtpService
             'otp_expires_at' => now()->addMinutes(10),
         ])->save();
 
-        // Log Email OTP for local dev/debugging
-        Log::info("=== EMAIL VERIFICATION OTP FOR {$user->email} ===: {$otp}");
+        // The OTP is only written to the log in the local environment (debugging); never in production
+        if (app()->environment('local')) {
+            Log::info("=== EMAIL VERIFICATION OTP FOR {$user->email} ===: {$otp}");
+        }
 
         // Dispatch Email Notification
         try {

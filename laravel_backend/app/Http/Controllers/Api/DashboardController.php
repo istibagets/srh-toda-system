@@ -398,7 +398,13 @@ class DashboardController extends Controller
             // Geofence check against dynamic settings
             $lat = $request->input('lat');
             $lng = $request->input('lng');
-            if ($lat !== null && $lng !== null) {
+            if (!is_numeric($lat) || !is_numeric($lng)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Location is required to go on duty. Turn on GPS and try again.',
+                ], 422);
+            }
+            {
                 $terminalLat = (float) \App\Support\SystemSettings::get('geofencing.terminal_lat', 15.429550175641715);
                 $terminalLng = (float) \App\Support\SystemSettings::get('geofencing.terminal_lng', 120.92240292427664);
                 $terminalRadius = (float) \App\Support\SystemSettings::get('geofencing.terminal_radius', 35);
